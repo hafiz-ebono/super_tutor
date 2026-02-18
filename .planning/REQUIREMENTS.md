@@ -9,7 +9,7 @@
 
 - [ ] **SESS-01**: User can create a session by providing an article/doc URL and a focus prompt describing what to study
 - [ ] **SESS-02**: User can create a session by providing a topic description (AI performs deep web research to generate source material)
-- [ ] **SESS-03**: User selects a tutoring type (Micro Learning / Teaching a Kid / Advanced) before generating a session; this adapts tone and complexity of all generated content
+- [x] **SESS-03**: User selects a tutoring type (Micro Learning / Teaching a Kid / Advanced) before generating a session; this adapts tone and complexity of all generated content
 - [ ] **SESS-04**: If URL scraping fails (paywall, empty page, invalid URL), user is shown a specific error message and offered a paste-text fallback to continue
 - [ ] **SESS-05**: User sees step-by-step progress feedback during AI generation (e.g., "Extracting content... Generating notes... Creating flashcards... Building quiz...")
 
@@ -26,8 +26,8 @@
 
 ### AI Infrastructure
 
-- [ ] **AGENT-01**: All AI agents (URL extraction, topic research, notes generation, flashcard generation, quiz generation) are built with the Agno framework
-- [ ] **AGENT-02**: AI provider, model, and API key are configurable via environment variables or config file — switching providers (OpenAI, Anthropic, Groq, etc.) or models requires only a config change, no code changes
+- [x] **AGENT-01**: All AI agents (URL extraction, topic research, notes generation, flashcard generation, quiz generation) are built with the Agno framework
+- [x] **AGENT-02**: AI provider, model, and API key are configurable via environment variables or config file — switching providers (OpenAI, Anthropic, Groq, etc.) or models requires only a config change, no code changes
 
 ## v2 Requirements
 
@@ -69,7 +69,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | SESS-01 | Phase 1 | Pending |
 | SESS-02 | Phase 2 | Pending |
-| SESS-03 | Phase 1 | Pending |
+| SESS-03 | Phase 1 | Complete (01-01) |
 | SESS-04 | Phase 1 | Pending |
 | SESS-05 | Phase 1 | Pending |
 | GEN-01 | Phase 1 | Pending |
@@ -77,8 +77,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GEN-03 | Phase 1 | Pending |
 | STUDY-01 | Phase 1 | Pending |
 | STUDY-02 | Phase 3 | Pending |
-| AGENT-01 | Phase 1 | Pending |
-| AGENT-02 | Phase 1 | Pending |
+| AGENT-01 | Phase 1 | Complete (01-01) |
+| AGENT-02 | Phase 1 | Complete (01-01) |
 
 **Coverage:**
 - v1 requirements: 12 total
@@ -87,4 +87,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-18 — Traceability finalized after roadmap creation*
+*Last updated: 2026-02-18 — AGENT-01, AGENT-02, SESS-03 marked complete after 01-01 execution*

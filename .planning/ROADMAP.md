@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 8 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Backend foundation: config, Pydantic models, model factory, personas
+- [x] 01-01-PLAN.md — Backend foundation: config, Pydantic models, model factory, personas
 - [ ] 01-02-PLAN.md — Frontend scaffold: Next.js 15, OAT UI CSS, shared TypeScript session types
 - [ ] 01-03-PLAN.md — URL extraction chain (TDD): Jina → trafilatura → Playwright with fallback and error classification
 - [ ] 01-04-PLAN.md — Agno agents + SessionWorkflow: notes, flashcard, quiz agents with progress streaming
@@ -71,6 +71,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. URL Session Pipeline | 0/8 | Not started | - |
+| 1. URL Session Pipeline | 1/8 | In progress | - |
 | 2. Topic Description Path | 0/TBD | Not started | - |
 | 3. Study Experience Polish | 0/TBD | Not started | - |
