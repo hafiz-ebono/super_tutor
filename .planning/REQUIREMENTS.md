@@ -68,7 +68,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SESS-01 | Phase 1 | Pending |
-| SESS-02 | Phase 3 | Pending |
+| SESS-02 | Phase 2 | Pending |
 | SESS-03 | Phase 1 | Pending |
 | SESS-04 | Phase 1 | Pending |
 | SESS-05 | Phase 1 | Pending |
@@ -76,7 +76,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GEN-02 | Phase 1 | Pending |
 | GEN-03 | Phase 1 | Pending |
 | STUDY-01 | Phase 1 | Pending |
-| STUDY-02 | Phase 2 | Pending |
+| STUDY-02 | Phase 3 | Pending |
 | AGENT-01 | Phase 1 | Pending |
 | AGENT-02 | Phase 1 | Pending |
 
@@ -87,4 +87,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-18 after initial definition*
+*Last updated: 2026-02-18 — Traceability finalized after roadmap creation*
