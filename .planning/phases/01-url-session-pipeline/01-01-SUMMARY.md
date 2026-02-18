@@ -83,7 +83,7 @@ Each task was committed atomically:
 1. **Task 1: Backend project scaffold, dependencies, and config** - `450910d` (feat)
 2. **Task 2: Pydantic session models, model factory, and personas** - `19c98b5` (feat)
 
-**Plan metadata:** _(pending — docs commit)_
+**Plan metadata:** `7b73c43` (docs: complete backend foundation plan)
 
 ## Files Created/Modified
 
