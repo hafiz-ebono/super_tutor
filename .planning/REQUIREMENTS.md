@@ -15,9 +15,9 @@
 
 ### Content Generation
 
-- [ ] **GEN-01**: AI generates structured notes from the session content, adapted to the selected tutoring type's tone and complexity
-- [ ] **GEN-02**: AI generates flashcards from the session content, adapted to the selected tutoring type's tone and complexity
-- [ ] **GEN-03**: AI generates a multiple-choice quiz (4 options per question, one correct answer) from the session content, adapted to the selected tutoring type
+- [x] **GEN-01**: AI generates structured notes from the session content, adapted to the selected tutoring type's tone and complexity
+- [x] **GEN-02**: AI generates flashcards from the session content, adapted to the selected tutoring type's tone and complexity
+- [x] **GEN-03**: AI generates a multiple-choice quiz (4 options per question, one correct answer) from the session content, adapted to the selected tutoring type
 
 ### Study Experience
 
@@ -72,9 +72,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SESS-03 | Phase 1 | Complete (01-01) |
 | SESS-04 | Phase 1 | Complete |
 | SESS-05 | Phase 1 | Complete |
-| GEN-01 | Phase 1 | Pending |
-| GEN-02 | Phase 1 | Pending |
-| GEN-03 | Phase 1 | Pending |
+| GEN-01 | Phase 1 | Complete |
+| GEN-02 | Phase 1 | Complete |
+| GEN-03 | Phase 1 | Complete |
 | STUDY-01 | Phase 1 | Complete |
 | STUDY-02 | Phase 3 | Pending |
 | AGENT-01 | Phase 1 | Complete (01-01) |
