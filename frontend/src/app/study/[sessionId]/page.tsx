@@ -16,18 +16,18 @@ type Tab = "notes" | "flashcards" | "quiz";
 
 const TAB_ICONS: Record<Tab, React.ReactNode> = {
   notes: (
-    <svg className="bottom-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" />
     </svg>
   ),
   flashcards: (
-    <svg className="bottom-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
       <rect x="2" y="7" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z" />
     </svg>
   ),
   quiz: (
-    <svg className="bottom-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
       <circle cx="12" cy="12" r="10" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 17h.01" />
@@ -67,7 +67,7 @@ export default function StudyPage() {
 
   if (loading) {
     return (
-      <main className="vstack items-center justify-center" style={{ minHeight: "80vh" }}>
+      <main className="flex items-center justify-center min-h-[80vh]">
         <span className="spinner" />
       </main>
     );
@@ -75,10 +75,12 @@ export default function StudyPage() {
 
   if (error || !session) {
     return (
-      <main className="vstack items-center justify-center" style={{ minHeight: "80vh" }}>
-        <p style={{ color: "var(--muted-foreground)" }}>
+      <main className="flex items-center justify-center min-h-[80vh]">
+        <p className="text-zinc-500 text-sm">
           Session not found.{" "}
-          <Link href="/create" style={{ color: "var(--primary)" }}>Start a new session</Link>
+          <Link href="/create" className="text-blue-600 hover:underline">
+            Start a new session
+          </Link>
         </p>
       </main>
     );
@@ -102,65 +104,61 @@ export default function StudyPage() {
   const correctCount = answers.filter((a, i) => a === session!.quiz[i]?.answer_index).length;
 
   return (
-    <div style={{ display: "flex", minHeight: "calc(100vh - 52px)" }}>
+    <div className="flex" style={{ minHeight: "calc(100vh - 56px)" }}>
 
-      {/* Desktop sidebar — hidden on mobile via CSS */}
-      <aside className="study-sidebar">
-        <div style={{ marginBottom: "var(--space-6)" }}>
-          <p style={{
-            fontWeight: "var(--font-semibold)",
-            marginBottom: "var(--space-2)",
-            fontSize: "var(--text-2)",
-            lineHeight: "1.4",
-          }}>
+      {/* Desktop sidebar — hidden on mobile */}
+      <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-zinc-100 px-3 py-5">
+        <div className="mb-5 px-2">
+          <p className="font-semibold text-zinc-900 text-sm leading-snug mb-2">
             {session.source_title}
           </p>
-          <span className="badge" style={{ fontSize: "var(--text-1)" }}>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-zinc-100 text-zinc-600">
             {MODE_LABELS[session.tutoring_type]}
           </span>
         </div>
 
-        <nav className="vstack" style={{ gap: "var(--space-1)" }}>
+        <nav className="flex flex-col gap-0.5">
           {(["notes", "flashcards", "quiz"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`nav-link${activeTab === tab ? " nav-link-active" : ""}`}
+              className={`flex items-center gap-2.5 w-full text-left px-2 py-2 rounded-lg text-sm capitalize transition-colors ${
+                activeTab === tab
+                  ? "bg-zinc-100 text-zinc-900 font-medium"
+                  : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+              }`}
             >
+              {TAB_ICONS[tab]}
               {tab}
             </button>
           ))}
         </nav>
 
-        <div style={{ marginTop: "auto" }}>
-          <Link href="/create" className="nav-link" style={{ fontSize: "var(--text-1)" }}>
+        <div className="mt-auto">
+          <Link
+            href="/create"
+            className="flex items-center gap-2 px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-colors"
+          >
             + New session
           </Link>
         </div>
       </aside>
 
-      {/* Right column: mobile header + main content + mobile bottom nav */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      {/* Right column */}
+      <div className="flex flex-col flex-1 min-w-0">
 
-        {/* Mobile meta-header — hidden on desktop via CSS */}
-        <div className="study-mobile-header">
-          <p style={{
-            fontWeight: "var(--font-semibold)",
-            fontSize: "var(--text-2)",
-            lineHeight: "1.4",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}>
+        {/* Mobile meta-header — hidden on desktop */}
+        <div className="md:hidden flex flex-col gap-1.5 px-5 py-3 border-b border-zinc-100">
+          <p className="font-semibold text-zinc-900 text-sm leading-snug truncate">
             {session.source_title}
           </p>
-          <span className="badge" style={{ fontSize: "var(--text-1)", alignSelf: "flex-start" }}>
+          <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-zinc-100 text-zinc-600">
             {MODE_LABELS[session.tutoring_type]}
           </span>
         </div>
 
         {/* Main content */}
-        <main className="study-main-content" style={{ flex: 1, padding: "var(--space-8)", maxWidth: "780px" }}>
+        <main className="flex-1 px-6 py-8 max-w-3xl md:pb-8 pb-24">
 
           {/* Notes */}
           {activeTab === "notes" && (
@@ -172,13 +170,19 @@ export default function StudyPage() {
           {/* Flashcards */}
           {activeTab === "flashcards" && (
             <div>
-              <h2 style={{ fontSize: "var(--text-4)", fontWeight: "var(--font-semibold)", marginBottom: "var(--space-6)" }}>
-                Flashcards
-              </h2>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "var(--space-4)" }}>
+              <h2 className="text-xl font-semibold text-zinc-900 mb-6">Flashcards</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {session.flashcards.map((card, i) => (
-                  <article key={i} className="card" style={{ padding: "var(--space-5)", minHeight: "120px" }}>
-                    <p style={{ fontWeight: "var(--font-medium)", fontSize: "var(--text-2)" }}>{card.front}</p>
+                  <article
+                    key={i}
+                    className="border border-zinc-200 rounded-xl p-5 bg-white min-h-[100px] flex flex-col justify-between"
+                  >
+                    <p className="font-medium text-zinc-900 text-sm leading-relaxed">
+                      {card.front}
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
+                      {card.back}
+                    </p>
                   </article>
                 ))}
               </div>
@@ -188,45 +192,51 @@ export default function StudyPage() {
           {/* Quiz */}
           {activeTab === "quiz" && (
             <div>
-              <h2 style={{ fontSize: "var(--text-4)", fontWeight: "var(--font-semibold)", marginBottom: "var(--space-6)" }}>
-                Quiz
-              </h2>
+              <h2 className="text-xl font-semibold text-zinc-900 mb-6">Quiz</h2>
 
               {quizPhase === "answering" && session.quiz[currentQ] && (
-                <div className="vstack" style={{ gap: "var(--space-4)" }}>
-                  <p style={{ fontSize: "var(--text-1)", color: "var(--muted-foreground)" }}>
+                <div className="flex flex-col gap-4">
+                  <p className="text-xs text-zinc-400">
                     Question {currentQ + 1} of {session.quiz.length}
                   </p>
-                  <p style={{ fontSize: "var(--text-3)", fontWeight: "var(--font-semibold)" }}>
+                  <p className="text-base font-semibold text-zinc-900">
                     {session.quiz[currentQ].question}
                   </p>
 
-                  <div className="vstack" style={{ gap: "var(--space-2)" }}>
+                  <div className="flex flex-col gap-2">
                     {session.quiz[currentQ].options.map((option, i) => {
                       const answered = answers[currentQ] !== null;
                       const isSelected = answers[currentQ] === i;
                       const isCorrect = i === session.quiz[currentQ].answer_index;
-                      let extraClass = "";
-                      if (answered && isCorrect) extraClass = " quiz-option-correct";
-                      else if (answered && isSelected) extraClass = " quiz-option-wrong";
+
+                      let stateClass = "border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50";
+                      if (answered && isCorrect) stateClass = "border-green-500 bg-green-50";
+                      else if (answered && isSelected) stateClass = "border-red-400 bg-red-50";
 
                       return (
                         <button
                           key={i}
                           onClick={() => selectAnswer(i)}
                           disabled={answered}
-                          className={`quiz-option${extraClass}`}
+                          className={`block w-full text-left px-4 py-3 border rounded-xl text-sm text-zinc-900 transition-colors disabled:cursor-default ${stateClass}`}
                         >
                           {option}
-                          {answered && isCorrect && " ✓"}
-                          {answered && isSelected && !isCorrect && " ✗"}
+                          {answered && isCorrect && (
+                            <span className="ml-2 text-green-600">✓</span>
+                          )}
+                          {answered && isSelected && !isCorrect && (
+                            <span className="ml-2 text-red-500">✗</span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
 
                   {answers[currentQ] !== null && (
-                    <button onClick={nextQuestion} className="btn btn-ghost" style={{ alignSelf: "flex-start" }}>
+                    <button
+                      onClick={nextQuestion}
+                      className="self-start text-sm text-zinc-500 hover:text-zinc-900 px-3 py-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
+                    >
                       {currentQ < session.quiz.length - 1 ? "Next question →" : "See results →"}
                     </button>
                   )}
@@ -234,37 +244,32 @@ export default function StudyPage() {
               )}
 
               {quizPhase === "reviewing" && (
-                <div className="vstack" style={{ gap: "var(--space-6)" }}>
+                <div className="flex flex-col gap-6">
                   <div>
-                    <h3 style={{ fontSize: "var(--text-4)", fontWeight: "var(--font-bold)" }}>
+                    <h3 className="text-2xl font-bold text-zinc-900">
                       You scored {correctCount} / {session.quiz.length}
                     </h3>
-                    <p style={{ color: "var(--muted-foreground)", marginTop: "var(--space-2)" }}>
-                      Review your answers below.
-                    </p>
+                    <p className="text-sm text-zinc-500 mt-1">Review your answers below.</p>
                   </div>
 
-                  <div className="vstack" style={{ gap: "var(--space-4)" }}>
+                  <div className="flex flex-col gap-3">
                     {session.quiz.map((q, i) => {
                       const userAnswer = answers[i];
                       const correct = userAnswer === q.answer_index;
                       return (
                         <article
                           key={i}
-                          className="card"
-                          style={{
-                            padding: "var(--space-4)",
-                            borderLeft: `4px solid var(${correct ? "--success" : "--danger"})`,
-                          }}
+                          className="border border-zinc-200 rounded-xl p-4"
+                          style={{ borderLeft: `4px solid ${correct ? "#4ade80" : "#f87171"}` }}
                         >
-                          <p style={{ fontWeight: "var(--font-semibold)", marginBottom: "var(--space-2)" }}>
+                          <p className="font-semibold text-zinc-900 text-sm mb-2">
                             {i + 1}. {q.question}
                           </p>
-                          <p style={{ fontSize: "var(--text-1)", color: "var(--success-foreground)" }}>
+                          <p className="text-xs text-green-700">
                             ✓ {q.options[q.answer_index]}
                           </p>
                           {!correct && userAnswer !== null && (
-                            <p style={{ fontSize: "var(--text-1)", color: "var(--danger-foreground)", marginTop: "var(--space-1)" }}>
+                            <p className="text-xs text-red-600 mt-0.5">
                               ✗ Your answer: {q.options[userAnswer]}
                             </p>
                           )}
@@ -274,8 +279,7 @@ export default function StudyPage() {
                   </div>
 
                   <button
-                    className="btn btn-ghost"
-                    style={{ alignSelf: "flex-start" }}
+                    className="self-start text-sm text-zinc-500 hover:text-zinc-900 px-3 py-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
                     onClick={() => {
                       setCurrentQ(0);
                       setAnswers(new Array(session!.quiz.length).fill(null));
@@ -290,13 +294,20 @@ export default function StudyPage() {
           )}
         </main>
 
-        {/* Mobile bottom tab bar — hidden on desktop via CSS */}
-        <nav className="study-bottom-nav">
+        {/* Mobile bottom tab bar — hidden on desktop */}
+        <nav
+          className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 flex z-50"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
           {(["notes", "flashcards", "quiz"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`bottom-tab${activeTab === tab ? " bottom-tab-active" : ""}`}
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-1 text-[0.6875rem] capitalize transition-colors min-h-[56px] ${
+                activeTab === tab
+                  ? "text-blue-600 font-semibold"
+                  : "text-zinc-400"
+              }`}
             >
               {TAB_ICONS[tab]}
               {tab}

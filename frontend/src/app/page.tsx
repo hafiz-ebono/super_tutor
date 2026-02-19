@@ -1,119 +1,63 @@
 import Link from "next/link";
 
+const FEATURES = [
+  {
+    title: "Micro Learning",
+    body: "Short, punchy bullets. Just the essentials, fast.",
+    icon: "⚡",
+  },
+  {
+    title: "Teaching a Kid",
+    body: "Plain language and everyday analogies. No jargon.",
+    icon: "🎯",
+  },
+  {
+    title: "Advanced",
+    body: "Full technical depth for graduate-level understanding.",
+    icon: "🎓",
+  },
+];
+
 export default function LandingPage() {
   return (
     <main>
       {/* Hero */}
-      <section
-        className="container vstack items-center text-center hero-section"
-        style={{ paddingTop: "var(--space-18)", paddingBottom: "var(--space-18)" }}
-      >
-        <p
-          style={{
-            fontSize: "var(--text-1)",
-            fontWeight: "var(--font-semibold)",
-            color: "var(--primary)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            marginBottom: "var(--space-3)",
-          }}
-        >
+      <section className="max-w-3xl mx-auto px-5 pt-20 pb-20 flex flex-col items-center text-center">
+        <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">
           AI-powered study companion
         </p>
-        <h1
-          style={{
-            fontSize: "clamp(var(--text-5), 5vw, var(--text-7))",
-            fontWeight: "var(--font-bold)",
-            lineHeight: "1.15",
-            maxWidth: "640px",
-            letterSpacing: "-0.02em",
-          }}
-        >
+        <h1 className="text-4xl sm:text-5xl font-bold text-zinc-900 leading-tight tracking-tight max-w-xl">
           Turn any article into a complete study session
         </h1>
-        <p
-          style={{
-            fontSize: "var(--text-3)",
-            color: "var(--muted-foreground)",
-            maxWidth: "520px",
-            marginTop: "var(--space-5)",
-            lineHeight: "var(--leading-normal)",
-          }}
-        >
-          Super Tutor is an AI study companion that transforms any article or doc URL into
-          structured notes, interactive flashcards, and a quiz — tailored to your learning
-          style, ready in under a minute.
+        <p className="text-base text-zinc-500 max-w-md mt-5 leading-relaxed">
+          Super Tutor transforms any article or doc URL into structured notes,
+          interactive flashcards, and a quiz — tailored to your learning style,
+          ready in under a minute.
         </p>
         <Link
           href="/create"
-          className="btn btn-primary"
-          style={{
-            fontSize: "var(--text-3)",
-            padding: "var(--space-4) var(--space-8)",
-            marginTop: "var(--space-8)",
-          }}
+          className="mt-8 inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors"
         >
           Start studying →
         </Link>
       </section>
 
       {/* Feature cards */}
-      <section
-        className="container"
-        style={{
-          paddingTop: "var(--space-12)",
-          paddingBottom: "var(--space-16)",
-          borderTop: "1px solid var(--border)",
-        }}
-      >
-        <h2
-          className="text-center"
-          style={{
-            fontSize: "var(--text-4)",
-            fontWeight: "var(--font-semibold)",
-            marginBottom: "var(--space-8)",
-          }}
-        >
+      <section className="max-w-3xl mx-auto px-5 pt-12 pb-16 border-t border-zinc-100">
+        <h2 className="text-center text-xl font-semibold text-zinc-900 mb-8">
           Three ways to learn
         </h2>
-        <div className="feature-cards-grid">
-          {[
-            {
-              title: "Micro Learning",
-              body: "Short, punchy bullets. Just the essentials, fast.",
-              icon: "⚡",
-            },
-            {
-              title: "Teaching a Kid",
-              body: "Plain language and everyday analogies. No jargon.",
-              icon: "🎯",
-            },
-            {
-              title: "Advanced",
-              body: "Full technical depth for graduate-level understanding.",
-              icon: "🎓",
-            },
-          ].map((card) => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {FEATURES.map((card) => (
             <article
               key={card.title}
-              className="card"
-              style={{ padding: "var(--space-6)" }}
+              className="border border-zinc-200 rounded-xl p-6 bg-white"
             >
-              <div style={{ fontSize: "var(--text-5)", marginBottom: "var(--space-3)" }}>
-                {card.icon}
-              </div>
-              <h3
-                style={{
-                  fontWeight: "var(--font-semibold)",
-                  marginBottom: "var(--space-2)",
-                  fontSize: "var(--text-3)",
-                }}
-              >
+              <div className="text-2xl mb-3">{card.icon}</div>
+              <h3 className="font-semibold text-zinc-900 mb-1 text-sm">
                 {card.title}
               </h3>
-              <p style={{ color: "var(--muted-foreground)", fontSize: "var(--text-2)", lineHeight: "var(--leading-normal)" }}>
-                {card.body}
-              </p>
+              <p className="text-sm text-zinc-500 leading-relaxed">{card.body}</p>
             </article>
           ))}
         </div>

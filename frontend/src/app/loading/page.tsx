@@ -60,24 +60,20 @@ export default function LoadingPage() {
   const progressPercent = PROGRESS_WEIGHTS[Math.min(stepIndex, PROGRESS_WEIGHTS.length - 1)];
 
   return (
-    <main
-      className="vstack items-center justify-center"
-      style={{ minHeight: "100vh", padding: "var(--space-8)" }}
-    >
-      {/* Progress bar */}
-      <div className="progress-bar-track">
-        <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
+    <main className="flex flex-col items-center justify-center min-h-[calc(100vh-56px)] p-8">
+      {/* Thin progress bar at top of page */}
+      <div className="fixed top-14 left-0 right-0 h-0.5 bg-zinc-100">
+        <div
+          className="h-full bg-blue-600 transition-all duration-500 ease-in-out"
+          style={{ width: `${progressPercent}%` }}
+        />
       </div>
 
       {/* Status */}
-      <div className="vstack items-center text-center" style={{ gap: "var(--space-3)" }}>
+      <div className="flex flex-col items-center text-center gap-4">
         <span className="spinner" />
-        <p style={{ fontSize: "var(--text-3)", fontWeight: "var(--font-medium)" }}>
-          {currentMessage}
-        </p>
-        <p style={{ fontSize: "var(--text-1)", color: "var(--muted-foreground)" }}>
-          This usually takes 30–60 seconds
-        </p>
+        <p className="text-base font-medium text-zinc-900">{currentMessage}</p>
+        <p className="text-sm text-zinc-400">This usually takes 30–60 seconds</p>
       </div>
     </main>
   );

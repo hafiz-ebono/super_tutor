@@ -20,18 +20,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="stylesheet" href="https://oat.ink/oat.min.css" />
-      </head>
       <body>
-        <header className="site-header">
-          <Link href="/" className="site-header-logo">
+        <header className="sticky top-0 z-50 bg-white border-b border-zinc-100 px-5 h-14 flex items-center justify-between">
+          <Link href="/" className="font-bold text-zinc-900 tracking-tight">
             Super Tutor
           </Link>
           <Link
             href="/create"
-            className="btn btn-primary"
-            style={{ fontSize: "var(--text-1)", padding: "var(--space-2) var(--space-4)" }}
+            className="text-sm font-medium bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
           >
             New session →
           </Link>

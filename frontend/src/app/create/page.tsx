@@ -17,6 +17,9 @@ const ERROR_MESSAGES: Record<string, { top: string; pointer: string }> = {
   unreachable: { top: "We couldn't reach that page", pointer: "The site may be down or blocked. Paste the article text below to continue." },
 };
 
+const inputClass =
+  "w-full px-3 py-2.5 border border-zinc-200 rounded-lg bg-white text-zinc-900 text-sm placeholder:text-zinc-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors font-[inherit]";
+
 export default function CreatePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,36 +70,40 @@ export default function CreatePage() {
   }
 
   return (
-    <main className="container" style={{ maxWidth: "640px", paddingTop: "var(--space-12)", paddingBottom: "var(--space-12)" }}>
-      <h1 style={{ fontSize: "var(--text-5)", fontWeight: "var(--font-bold)", marginBottom: "var(--space-8)" }}>
+    <main className="max-w-xl mx-auto px-5 pt-12 pb-12">
+      <h1 className="text-2xl font-bold text-zinc-900 mb-8">
         Create a study session
       </h1>
 
-      <form onSubmit={handleSubmit} className="vstack" style={{ gap: "var(--space-6)" }}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
 
         {/* Tutoring mode cards */}
-        <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
-          <legend style={{ fontSize: "var(--text-2)", fontWeight: "var(--font-medium)", marginBottom: "var(--space-3)", color: "var(--muted-foreground)" }}>
+        <fieldset className="border-none p-0 m-0">
+          <legend className="text-sm font-medium text-zinc-500 mb-3">
             How do you want to learn?
           </legend>
-          <div className="vstack" style={{ gap: "var(--space-2)" }}>
+          <div className="flex flex-col gap-2">
             {TUTORING_MODES.map((mode) => (
-              <label key={mode.id} style={{ cursor: "pointer" }}>
+              <label key={mode.id} className="cursor-pointer">
                 <input
                   type="radio"
                   name="tutoring_mode"
                   value={mode.id}
                   checked={selectedMode === mode.id}
                   onChange={() => setSelectedMode(mode.id)}
-                  style={{ display: "none" }}
+                  className="sr-only"
                 />
-                <div className="mode-card" aria-selected={selectedMode === mode.id}>
-                  <p style={{ fontWeight: "var(--font-semibold)", marginBottom: "var(--space-1)", fontSize: "var(--text-2)" }}>
+                <div
+                  className={`border-2 rounded-xl p-4 transition-colors ${
+                    selectedMode === mode.id
+                      ? "border-blue-600 bg-blue-50"
+                      : "border-zinc-200 hover:border-zinc-300"
+                  }`}
+                >
+                  <p className="font-semibold text-zinc-900 text-sm mb-0.5">
                     {mode.label}
                   </p>
-                  <p style={{ fontSize: "var(--text-1)", color: "var(--muted-foreground)" }}>
-                    {mode.description}
-                  </p>
+                  <p className="text-xs text-zinc-500">{mode.description}</p>
                 </div>
               </label>
             ))}
@@ -105,14 +112,14 @@ export default function CreatePage() {
 
         {/* URL input */}
         {!pasteText && (
-          <div className="vstack" style={{ gap: "var(--space-2)" }}>
-            <label htmlFor="url" style={{ fontSize: "var(--text-2)", fontWeight: "var(--font-medium)" }}>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="url" className="text-sm font-medium text-zinc-900">
               Article or doc URL
             </label>
             <input
               id="url"
               type="url"
-              className="input-field"
+              className={inputClass}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://..."
@@ -123,15 +130,18 @@ export default function CreatePage() {
 
         {/* Inline error + paste fallback */}
         {errorMessages && (
-          <div className="alert-danger vstack" style={{ gap: "var(--space-3)" }} role="alert">
-            <p style={{ fontWeight: "var(--font-semibold)", fontSize: "var(--text-2)" }}>{errorMessages.top}</p>
-            <p style={{ fontSize: "var(--text-1)" }}>{errorMessages.pointer}</p>
-            <label htmlFor="paste_text" style={{ fontSize: "var(--text-2)", fontWeight: "var(--font-medium)" }}>
+          <div
+            className="flex flex-col gap-3 p-4 rounded-xl border border-red-200 bg-red-50"
+            role="alert"
+          >
+            <p className="font-semibold text-sm text-red-700">{errorMessages.top}</p>
+            <p className="text-xs text-red-600">{errorMessages.pointer}</p>
+            <label htmlFor="paste_text" className="text-sm font-medium text-zinc-900">
               Paste the article text instead
             </label>
             <textarea
               id="paste_text"
-              className="input-field"
+              className={inputClass}
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               placeholder="Paste the full article text here (at least a few paragraphs)..."
@@ -141,7 +151,7 @@ export default function CreatePage() {
               style={{ resize: "vertical" }}
             />
             {pasteText.length > 0 && pasteText.length < 200 && (
-              <p style={{ fontSize: "var(--text-1)", color: "var(--danger)" }}>
+              <p className="text-xs text-red-500">
                 Please paste at least a few paragraphs for best results.
               </p>
             )}
@@ -149,15 +159,15 @@ export default function CreatePage() {
         )}
 
         {/* Focus prompt */}
-        <div className="vstack" style={{ gap: "var(--space-2)" }}>
-          <label htmlFor="focus_prompt" style={{ fontSize: "var(--text-2)", fontWeight: "var(--font-medium)" }}>
+        <div className="flex flex-col gap-2">
+          <label htmlFor="focus_prompt" className="text-sm font-medium text-zinc-900">
             What do you want to focus on?{" "}
-            <span style={{ color: "var(--muted-foreground)", fontWeight: "var(--font-normal)" }}>(optional)</span>
+            <span className="text-zinc-400 font-normal">(optional)</span>
           </label>
           <input
             id="focus_prompt"
             type="text"
-            className="input-field"
+            className={inputClass}
             value={focusPrompt}
             onChange={(e) => setFocusPrompt(e.target.value)}
             placeholder="e.g. 'key algorithms', 'historical causes', 'main arguments'"
@@ -166,16 +176,18 @@ export default function CreatePage() {
 
         <button
           type="submit"
-          className="btn btn-primary"
+          className="self-start px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           disabled={!selectedMode || isSubmitting || (pasteText.length > 0 && pasteText.length < 200)}
-          style={{ alignSelf: "flex-start", fontSize: "var(--text-2)", padding: "var(--space-3) var(--space-6)" }}
         >
           {isSubmitting ? "Starting..." : "Generate my study session →"}
         </button>
       </form>
 
-      <div style={{ marginTop: "var(--space-8)" }}>
-        <Link href="/" className="btn btn-ghost" style={{ fontSize: "var(--text-1)" }}>
+      <div className="mt-8">
+        <Link
+          href="/"
+          className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors"
+        >
           ← Back
         </Link>
       </div>
