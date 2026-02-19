@@ -10,12 +10,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # AI provider config
-    agent_provider: str = "openai"
-    agent_model: str = "gpt-4o"
-    openai_api_key: str = ""
-    anthropic_api_key: str = ""
-    groq_api_key: str = ""
+    # AI provider config — set all three in .env
+    agent_provider: str = "openai"     # openai | anthropic | groq | openrouter
+    agent_model: str = "gpt-4o"        # model ID valid for chosen provider
+    agent_api_key: str = ""            # single key for whichever provider is active
 
     # URL extraction
     jina_api_key: str = ""
