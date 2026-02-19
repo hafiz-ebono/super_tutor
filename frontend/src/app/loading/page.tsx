@@ -9,7 +9,6 @@ export default function LoadingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
-  // These are passed from the create page so they can be forwarded in the error redirect
   const tutoringType = searchParams.get("tutoring_type") ?? "";
   const focusPrompt = searchParams.get("focus_prompt") ?? "";
 
@@ -36,27 +35,20 @@ export default function LoadingPage() {
     es.addEventListener("complete", (e: MessageEvent) => {
       const data: CompleteEvent = JSON.parse(e.data);
       es.close();
-      setStepIndex(SSE_STEPS.length - 1); // ensure bar hits 100%
-      // Small delay so user sees 100% before redirect
-      setTimeout(() => {
-        router.push(`/study/${data.session_id}`);
-      }, 400);
+      setStepIndex(SSE_STEPS.length - 1);
+      setTimeout(() => router.push(`/study/${data.session_id}`), 400);
     });
 
     es.addEventListener("error", (e: MessageEvent) => {
       es.close();
       try {
         const data: ErrorEvent = JSON.parse(e.data);
-        // Forward tutoring_type and focus_prompt so create page can restore mode and focus fields
-        router.push(
-          `/create?error=${data.kind}&tutoring_type=${tutoringType}&focus_prompt=${encodeURIComponent(focusPrompt)}`
-        );
+        router.push(`/create?error=${data.kind}&tutoring_type=${tutoringType}&focus_prompt=${encodeURIComponent(focusPrompt)}`);
       } catch {
         router.push(`/create?error=empty&tutoring_type=${tutoringType}&focus_prompt=${encodeURIComponent(focusPrompt)}`);
       }
     });
 
-    // Handle EventSource connection errors (network failure etc.)
     es.onerror = () => {
       es.close();
       router.push(`/create?error=unreachable&tutoring_type=${tutoringType}&focus_prompt=${encodeURIComponent(focusPrompt)}`);
@@ -69,39 +61,24 @@ export default function LoadingPage() {
 
   return (
     <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "2rem",
-      }}
+      className="flex flex-col items-center justify-center"
+      style={{ minHeight: "100vh", padding: "var(--space-8)" }}
     >
-      {/* Progress bar at top of viewport */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "4px",
-          background: "rgba(0,0,0,0.08)",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${progressPercent}%`,
-            background: "currentColor",
-            transition: "width 400ms ease-in-out",
-          }}
-        />
+      {/* Progress bar */}
+      <div className="progress-bar-track">
+        <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
       </div>
 
-      {/* Step message */}
-      <p style={{ fontSize: "1.25rem", textAlign: "center" }}>{currentMessage}</p>
-      <p style={{ opacity: 0.5, fontSize: "0.875rem" }}>This usually takes 30–60 seconds</p>
+      {/* Status */}
+      <div className="vstack items-center text-center" style={{ gap: "var(--space-3)" }}>
+        <span className="spinner" />
+        <p style={{ fontSize: "var(--text-3)", fontWeight: "var(--font-medium)" }}>
+          {currentMessage}
+        </p>
+        <p style={{ fontSize: "var(--text-1)", color: "var(--muted-foreground)" }}>
+          This usually takes 30–60 seconds
+        </p>
+      </div>
     </main>
   );
 }
