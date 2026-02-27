@@ -64,6 +64,8 @@ class SessionWorkflow:
         tutoring_type: str,
         focus_prompt: str = "",
         url: str = "",
+        session_type: str = "url",
+        sources: list | None = None,
     ) -> Iterator[RunResponse]:
         input_text = (
             f"Content:\n{content}\n\nFocus on: {focus_prompt}"
@@ -94,6 +96,8 @@ class SessionWorkflow:
             content={
                 "source_title": _extract_title(content, url),
                 "tutoring_type": tutoring_type,
+                "session_type": session_type,
+                "sources": sources,
                 "notes": notes,
                 "flashcards": flashcards,
                 "quiz": quiz,
