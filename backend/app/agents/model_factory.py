@@ -1,4 +1,8 @@
+import logging
+
 from app.config import get_settings
+
+logger = logging.getLogger("super_tutor.model_factory")
 
 
 def get_model():
@@ -9,12 +13,15 @@ def get_model():
 
     if provider == "anthropic":
         from agno.models.anthropic import Claude
+        logger.debug("Model resolved: provider=%s model=%s", provider, model_id)
         return Claude(id=model_id, api_key=api_key)
     elif provider == "groq":
         from agno.models.groq import Groq
+        logger.debug("Model resolved: provider=%s model=%s", provider, model_id)
         return Groq(id=model_id, api_key=api_key)
     elif provider == "openrouter":
         from agno.models.openai import OpenAIChat
+        logger.debug("Model resolved: provider=%s model=%s", provider, model_id)
         return OpenAIChat(
             id=model_id,
             api_key=api_key,
@@ -23,4 +30,5 @@ def get_model():
     else:
         # Default: OpenAI
         from agno.models.openai import OpenAIChat
+        logger.debug("Model resolved: provider=%s model=%s", provider, model_id)
         return OpenAIChat(id=model_id, api_key=api_key)
