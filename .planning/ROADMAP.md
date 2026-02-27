@@ -47,10 +47,13 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User can enter a topic description with no URL, and the system researches it and produces the same tabbed notes/flashcards/quiz output as the URL path
   2. The study page for a topic-description session shows a visible disclaimer that the content is AI-researched and should be verified with primary sources
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md — Backend: research_agent.py (Agno + DuckDuckGoTools) + extended session models (topic_description, session_type, sources)
+- [ ] 02-02-PLAN.md — Backend: topic branch in sessions router + session_type/sources passthrough in workflow
+- [ ] 02-03-PLAN.md — Frontend: URL/topic mode toggle on create page + extended TypeScript session types
+- [ ] 02-04-PLAN.md — Frontend: loading page topic steps + warning events + study page AI-researched disclaimer + human verification checkpoint
 
 ### Phase 3: Study Experience Polish
 **Goal**: Flashcards are interactive — users click to reveal answers with a flip animation
