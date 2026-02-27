@@ -1,5 +1,7 @@
 import json
+import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import List
 
@@ -7,6 +9,8 @@ from agno.agent import Agent
 from agno.tools.duckduckgo import DuckDuckGoTools
 
 from app.agents.model_factory import get_model
+
+logger = logging.getLogger("super_tutor.research")
 
 
 @dataclass
@@ -61,6 +65,8 @@ def run_research(topic: str, focus_prompt: str = "") -> ResearchResult:
     if focus_prompt:
         input_text = f"{topic}\n\nFocus on: {focus_prompt}"
 
+    logger.info("Research start — topic=%r focus=%r", topic[:80], focus_prompt[:40] if focus_prompt else "")
+    _t = time.perf_counter()
     response = agent.run(input_text)
     raw = response.content if hasattr(response, "content") else str(response)
 
@@ -72,4 +78,10 @@ def run_research(topic: str, focus_prompt: str = "") -> ResearchResult:
         sources = []
     sources = [s for s in sources if isinstance(s, str)]
 
+    logger.info(
+        "Research done — elapsed=%.2fs content_chars=%d sources=%d",
+        time.perf_counter() - _t,
+        len(content),
+        len(sources),
+    )
     return ResearchResult(content=content, sources=sources)

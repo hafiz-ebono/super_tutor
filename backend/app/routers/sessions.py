@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import uuid
 from typing import AsyncGenerator
 
@@ -10,6 +11,8 @@ from app.models.session import SessionRequest
 from app.extraction.chain import extract_content, ExtractionError
 from app.workflows.session_workflow import build_workflow
 from app.agents.research_agent import run_research
+
+logger = logging.getLogger("super_tutor.sessions")
 
 router = APIRouter()
 
@@ -27,6 +30,12 @@ async def create_session(request: SessionRequest):
     """
     session_id = str(uuid.uuid4())
     PENDING_STORE[session_id] = request.model_dump(mode="json")
+    logger.info(
+        "Session created — session_id=%s input_type=%s tutoring_type=%s",
+        session_id,
+        "topic" if request.topic_description else ("paste" if request.paste_text else "url"),
+        request.tutoring_type,
+    )
     return {"session_id": session_id}
 
 
@@ -40,6 +49,7 @@ async def stream_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
 
     params = PENDING_STORE.pop(session_id)
+    logger.info("Stream opened — session_id=%s", session_id)
 
     async def event_generator() -> AsyncGenerator[dict, None]:
         url = params.get("url") or ""
@@ -86,6 +96,7 @@ async def stream_session(session_id: str):
                 try:
                     result = run_research(topic_description, focus_prompt)
                 except Exception as e:
+                    logger.error("Research failed — session_id=%s error=%s", session_id, e, exc_info=True)
                     yield {
                         "event": "error",
                         "data": json.dumps({"kind": "empty", "message": f"Research failed: {e}. Please try again."}),
@@ -115,6 +126,7 @@ async def stream_session(session_id: str):
                 try:
                     content = await extract_content(str(url))
                 except ExtractionError as e:
+                    logger.warning("Extraction error — session_id=%s kind=%s message=%s", session_id, e.kind, e.message)
                     yield {
                         "event": "error",
                         "data": json.dumps({"kind": e.kind, "message": e.message}),
@@ -128,6 +140,7 @@ async def stream_session(session_id: str):
                 return
 
         except ExtractionError as e:
+            logger.warning("Extraction error — session_id=%s kind=%s message=%s", session_id, e.kind, e.message)
             yield {
                 "event": "error",
                 "data": json.dumps({"kind": e.kind, "message": e.message}),
@@ -158,6 +171,7 @@ async def stream_session(session_id: str):
                         **response.content,
                     }
                     SESSION_STORE[session_id] = session_data
+                    logger.info("Stream complete — session_id=%s", session_id)
                     yield {
                         "event": "complete",
                         "data": json.dumps({"session_id": session_id}),
@@ -173,6 +187,7 @@ async def stream_session(session_id: str):
                 await asyncio.sleep(0)
 
         except Exception as e:
+            logger.error("Workflow error — session_id=%s error=%s", session_id, e, exc_info=True)
             yield {
                 "event": "error",
                 "data": json.dumps({"kind": "empty", "message": str(e)}),

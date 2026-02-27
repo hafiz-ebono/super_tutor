@@ -10,12 +10,16 @@ inherit from agno.workflow.Workflow. The run() generator interface is preserved 
 the SSE endpoint (01-05) expects: yields objects with .content and .event attributes.
 """
 import json
+import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Iterator, Any
 
 from agno.agent import Agent
 from app.agents.model_factory import get_model
+
+logger = logging.getLogger("super_tutor.workflow")
 from app.agents.notes_agent import build_notes_agent
 from app.agents.flashcard_agent import build_flashcard_agent
 from app.agents.quiz_agent import build_quiz_agent
@@ -49,12 +53,14 @@ def _generate_title(text: str) -> str:
         ),
     )
     try:
+        logger.debug("Title generation start")
         result = agent.run(text[:800])
         title = (result.content or "").strip().strip('"').strip("'")
         if title:
+            logger.debug("Title generation done — title=%r", title)
             return title[:80]
     except Exception:
-        pass
+        logger.warning("Title generation failed, falling back to extract_title")
     return _extract_title(text)
 
 
@@ -100,7 +106,10 @@ class SessionWorkflow:
         # Step 1: Generate notes — critical. Agno returns provider error messages as content
         # strings rather than raising, so we check length (real notes are always >100 chars).
         yield RunResponse(content="Crafting your notes...")
+        logger.info("Workflow step start — step=notes tutoring_type=%s", tutoring_type)
+        _t = time.perf_counter()
         notes_result = self.notes_agent.run(input_text)
+        logger.info("Workflow step done — step=notes elapsed=%.2fs", time.perf_counter() - _t)
         notes = notes_result.content or ""
         if len(notes.strip()) < 100:
             raise RuntimeError(
@@ -109,25 +118,33 @@ class SessionWorkflow:
 
         # Step 2: Generate flashcards — non-critical. Show notes + error in flashcards tab.
         yield RunResponse(content="Making your flashcards...")
+        logger.info("Workflow step start — step=flashcards")
+        _t = time.perf_counter()
         try:
             flashcard_result = self.flashcard_agent.run(input_text)
+            logger.info("Workflow step done — step=flashcards elapsed=%.2fs", time.perf_counter() - _t)
             flashcards_raw = flashcard_result.content or "[]"
             flashcards = _parse_json_safe(flashcards_raw, [])
             if not flashcards:
                 errors["flashcards"] = "Flashcard generation returned an empty response."
         except Exception as e:
+            logger.error("Workflow step error — step=flashcards error=%s", e, exc_info=True)
             flashcards = []
             errors["flashcards"] = f"Flashcard generation failed: {e}"
 
         # Step 3: Generate quiz — non-critical. Show notes (+ flashcards if ok) + error in quiz tab.
         yield RunResponse(content="Building your quiz...")
+        logger.info("Workflow step start — step=quiz")
+        _t = time.perf_counter()
         try:
             quiz_result = self.quiz_agent.run(input_text)
+            logger.info("Workflow step done — step=quiz elapsed=%.2fs", time.perf_counter() - _t)
             quiz_raw = quiz_result.content or "[]"
             quiz = _parse_json_safe(quiz_raw, [])
             if not quiz:
                 errors["quiz"] = "Quiz generation returned an empty response."
         except Exception as e:
+            logger.error("Workflow step error — step=quiz error=%s", e, exc_info=True)
             quiz = []
             errors["quiz"] = f"Quiz generation failed: {e}"
 
