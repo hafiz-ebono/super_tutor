@@ -53,10 +53,10 @@ function CreateForm() {
     const payload: SessionRequest = {
       tutoring_type: selectedMode,
       focus_prompt: focusPrompt || undefined,
-      ...(pasteText
-        ? { paste_text: pasteText }
-        : inputMode === "topic"
+      ...(inputMode === "topic"
         ? { topic_description: topicDescription }
+        : pasteText
+        ? { paste_text: pasteText }
         : { url }),
     };
 
@@ -183,8 +183,8 @@ function CreateForm() {
           </div>
         )}
 
-        {/* Inline error + paste fallback */}
-        {errorMessages && (
+        {/* Inline error + paste fallback — URL mode only; topic mode uses research agent, not paste */}
+        {errorMessages && inputMode !== "topic" && (
           <div
             className="flex flex-col gap-3 p-4 rounded-xl border border-red-200 bg-red-50"
             role="alert"
