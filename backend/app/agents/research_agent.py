@@ -52,25 +52,24 @@ def _parse_json_safe(raw: str) -> dict:
 
 
 def run_research(topic: str, focus_prompt: str = "") -> ResearchResult:
-    """Run the research agent for a topic, returning synthesized content and source URLs."""
-    try:
-        agent = build_research_agent()
-        input_text = topic
-        if focus_prompt:
-            input_text = f"{topic}\n\nFocus on: {focus_prompt}"
+    """Run the research agent for a topic, returning synthesized content and source URLs.
 
-        response = agent.run(input_text)
-        raw = response.content if hasattr(response, "content") else str(response)
+    Raises on provider/network failures — callers should handle and emit an error event.
+    """
+    agent = build_research_agent()
+    input_text = topic
+    if focus_prompt:
+        input_text = f"{topic}\n\nFocus on: {focus_prompt}"
 
-        data = _parse_json_safe(raw)
-        content = data.get("content", "")
-        sources = data.get("sources", [])
+    response = agent.run(input_text)
+    raw = response.content if hasattr(response, "content") else str(response)
 
-        # Ensure sources is a list of strings
-        if not isinstance(sources, list):
-            sources = []
-        sources = [s for s in sources if isinstance(s, str)]
+    data = _parse_json_safe(raw)
+    content = data.get("content", "")
+    sources = data.get("sources", [])
 
-        return ResearchResult(content=content, sources=sources)
-    except Exception:
-        return ResearchResult(content="", sources=[])
+    if not isinstance(sources, list):
+        sources = []
+    sources = [s for s in sources if isinstance(s, str)]
+
+    return ResearchResult(content=content, sources=sources)

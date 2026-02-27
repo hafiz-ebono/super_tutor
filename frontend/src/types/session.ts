@@ -30,6 +30,7 @@ export interface SessionResult {
   notes: string; // markdown
   flashcards: Flashcard[];
   quiz: QuizQuestion[];
+  errors?: Record<string, string>; // per-section errors e.g. { flashcards: "...", quiz: "..." }
 }
 
 // SSE event shapes from the backend stream

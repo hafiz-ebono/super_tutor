@@ -95,28 +95,41 @@ class SessionWorkflow:
             else f"Content:\n{content}"
         )
 
-        # Step 1: Generate notes
+        errors: dict[str, str] = {}
+
+        # Step 1: Generate notes — critical. Agno returns provider error messages as content
+        # strings rather than raising, so we check length (real notes are always >100 chars).
         yield RunResponse(content="Crafting your notes...")
         notes_result = self.notes_agent.run(input_text)
         notes = notes_result.content or ""
-        if not notes.strip():
-            raise RuntimeError("Notes generation failed — the AI model returned an empty response. Please try again.")
+        if len(notes.strip()) < 100:
+            raise RuntimeError(
+                f"Notes generation failed — model returned: {notes.strip()!r}. Please try again."
+            )
 
-        # Step 2: Generate flashcards
+        # Step 2: Generate flashcards — non-critical. Show notes + error in flashcards tab.
         yield RunResponse(content="Making your flashcards...")
-        flashcard_result = self.flashcard_agent.run(input_text)
-        flashcards_raw = flashcard_result.content or "[]"
-        flashcards = _parse_json_safe(flashcards_raw, [])
-        if not flashcards:
-            raise RuntimeError("Flashcard generation failed — the AI model returned an empty response. Please try again.")
+        try:
+            flashcard_result = self.flashcard_agent.run(input_text)
+            flashcards_raw = flashcard_result.content or "[]"
+            flashcards = _parse_json_safe(flashcards_raw, [])
+            if not flashcards:
+                errors["flashcards"] = "Flashcard generation returned an empty response."
+        except Exception as e:
+            flashcards = []
+            errors["flashcards"] = f"Flashcard generation failed: {e}"
 
-        # Step 3: Generate quiz
+        # Step 3: Generate quiz — non-critical. Show notes (+ flashcards if ok) + error in quiz tab.
         yield RunResponse(content="Building your quiz...")
-        quiz_result = self.quiz_agent.run(input_text)
-        quiz_raw = quiz_result.content or "[]"
-        quiz = _parse_json_safe(quiz_raw, [])
-        if not quiz:
-            raise RuntimeError("Quiz generation failed — the AI model returned an empty response. Please try again.")
+        try:
+            quiz_result = self.quiz_agent.run(input_text)
+            quiz_raw = quiz_result.content or "[]"
+            quiz = _parse_json_safe(quiz_raw, [])
+            if not quiz:
+                errors["quiz"] = "Quiz generation returned an empty response."
+        except Exception as e:
+            quiz = []
+            errors["quiz"] = f"Quiz generation failed: {e}"
 
         # Final: AI-generated title from the most focused signal available
         source_title = _generate_title(title_input if title_input else content)
@@ -130,6 +143,7 @@ class SessionWorkflow:
                 "notes": notes,
                 "flashcards": flashcards,
                 "quiz": quiz,
+                "errors": errors if errors else None,
             },
         )
 

@@ -83,17 +83,25 @@ async def stream_session(session_id: str):
                 }
                 await asyncio.sleep(0)
 
-                result = run_research(topic_description, focus_prompt)
+                try:
+                    result = run_research(topic_description, focus_prompt)
+                except Exception as e:
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({"kind": "empty", "message": f"Research failed: {e}. Please try again."}),
+                    }
+                    return
+
                 content = result.content
                 sources = result.sources if result.sources else []
 
                 if not content or len(content.strip()) < 100:
-                    # Research failed or returned too little content — fall back to LLM knowledge
+                    # Model returned too little — not a hard failure, continue with LLM knowledge
                     content = f"Topic: {topic_description}\n\nFocus: {focus_prompt}" if focus_prompt else f"Topic: {topic_description}"
                     sources = []
                     yield {
                         "event": "warning",
-                        "data": json.dumps({"message": "Live research was unavailable — content was generated from AI knowledge. Verify with primary sources."}),
+                        "data": json.dumps({"message": "Research returned limited content — notes were generated from AI knowledge instead."}),
                     }
                     await asyncio.sleep(0)
 

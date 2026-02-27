@@ -37,3 +37,4 @@ class SessionResult(BaseModel):
     notes: str               # markdown string
     flashcards: List[Flashcard]
     quiz: List[QuizQuestion]
+    errors: Optional[dict] = None  # per-section errors e.g. {"flashcards": "...", "quiz": "..."}
