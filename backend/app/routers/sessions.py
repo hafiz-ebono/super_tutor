@@ -50,7 +50,10 @@ async def stream_session(session_id: str):
 
         session_type = "url"
         sources = None
-        title_hint = ""
+        # title_input: the focused signal passed to AI title generation.
+        # Topic sessions use topic_description (short, precise).
+        # URL/paste sessions pass empty string so the workflow uses the extracted content.
+        title_input = ""
 
         # Input validation: topic too short
         if topic_description and len(topic_description.strip()) < 10:
@@ -63,6 +66,7 @@ async def stream_session(session_id: str):
         try:
             if topic_description:
                 session_type = "topic"
+                title_input = topic_description
 
                 # Vague topic detection: fewer than 3 words
                 word_count = len(topic_description.split())
@@ -82,13 +86,11 @@ async def stream_session(session_id: str):
                 result = run_research(topic_description, focus_prompt)
                 content = result.content
                 sources = result.sources if result.sources else []
-                title_hint = " ".join(topic_description.split()[:5])
 
                 if not content or len(content.strip()) < 100:
                     # Research failed or returned too little content — fall back to LLM knowledge
                     content = f"Topic: {topic_description}\n\nFocus: {focus_prompt}" if focus_prompt else f"Topic: {topic_description}"
                     sources = []
-                    title_hint = " ".join(topic_description.split()[:5])
                     yield {
                         "event": "warning",
                         "data": json.dumps({"message": "Live research was unavailable — content was generated from AI knowledge. Verify with primary sources."}),
@@ -135,7 +137,7 @@ async def stream_session(session_id: str):
                 url=str(params.get("url") or ""),
                 session_type=session_type,
                 sources=sources,
-                title_hint=title_hint,
+                title_input=title_input,
             ):
                 # Check if this is the final completed response
                 event_name = getattr(response.event, "value", str(response.event)) if response.event else ""

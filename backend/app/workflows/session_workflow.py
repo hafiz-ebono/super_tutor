@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Iterator, Any
 
+from agno.agent import Agent
+from app.agents.model_factory import get_model
 from app.agents.notes_agent import build_notes_agent
 from app.agents.flashcard_agent import build_flashcard_agent
 from app.agents.quiz_agent import build_quiz_agent
@@ -35,6 +37,25 @@ def _extract_title(content: str, url: str = "") -> str:
         if line and not line.startswith("#"):
             return line[:80]
     return url[:80] if url else "Untitled"
+
+
+def _generate_title(text: str) -> str:
+    """Ask the AI for a concise 3-5 word title. Falls back to _extract_title on failure."""
+    agent = Agent(
+        model=get_model(),
+        instructions=(
+            "Generate a concise 3-5 word title that captures the main subject of the content provided. "
+            "Return ONLY the title — no punctuation at the end, no quotes, no explanation."
+        ),
+    )
+    try:
+        result = agent.run(text[:800])
+        title = (result.content or "").strip().strip('"').strip("'")
+        if title:
+            return title[:80]
+    except Exception:
+        pass
+    return _extract_title(text)
 
 
 def _parse_json_safe(raw: str, fallback: list) -> list:
@@ -66,7 +87,7 @@ class SessionWorkflow:
         url: str = "",
         session_type: str = "url",
         sources: list | None = None,
-        title_hint: str = "",
+        title_input: str = "",
     ) -> Iterator[RunResponse]:
         input_text = (
             f"Content:\n{content}\n\nFocus on: {focus_prompt}"
@@ -97,8 +118,8 @@ class SessionWorkflow:
         if not quiz:
             raise RuntimeError("Quiz generation failed — the AI model returned an empty response. Please try again.")
 
-        # Final: complete event with all data
-        source_title = title_hint if title_hint else _extract_title(content, url)
+        # Final: AI-generated title from the most focused signal available
+        source_title = _generate_title(title_input if title_input else content)
         yield RunResponse(
             event="workflow_completed",
             content={
