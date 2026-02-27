@@ -66,6 +66,7 @@ class SessionWorkflow:
         url: str = "",
         session_type: str = "url",
         sources: list | None = None,
+        title_hint: str = "",
     ) -> Iterator[RunResponse]:
         input_text = (
             f"Content:\n{content}\n\nFocus on: {focus_prompt}"
@@ -77,24 +78,31 @@ class SessionWorkflow:
         yield RunResponse(content="Crafting your notes...")
         notes_result = self.notes_agent.run(input_text)
         notes = notes_result.content or ""
+        if not notes.strip():
+            raise RuntimeError("Notes generation failed — the AI model returned an empty response. Please try again.")
 
         # Step 2: Generate flashcards
         yield RunResponse(content="Making your flashcards...")
         flashcard_result = self.flashcard_agent.run(input_text)
         flashcards_raw = flashcard_result.content or "[]"
         flashcards = _parse_json_safe(flashcards_raw, [])
+        if not flashcards:
+            raise RuntimeError("Flashcard generation failed — the AI model returned an empty response. Please try again.")
 
         # Step 3: Generate quiz
         yield RunResponse(content="Building your quiz...")
         quiz_result = self.quiz_agent.run(input_text)
         quiz_raw = quiz_result.content or "[]"
         quiz = _parse_json_safe(quiz_raw, [])
+        if not quiz:
+            raise RuntimeError("Quiz generation failed — the AI model returned an empty response. Please try again.")
 
         # Final: complete event with all data
+        source_title = title_hint if title_hint else _extract_title(content, url)
         yield RunResponse(
             event="workflow_completed",
             content={
-                "source_title": _extract_title(content, url),
+                "source_title": source_title,
                 "tutoring_type": tutoring_type,
                 "session_type": session_type,
                 "sources": sources,
