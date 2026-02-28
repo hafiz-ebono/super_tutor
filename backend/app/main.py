@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
 
 
 from app.routers import sessions
+from app.routers import chat
 
 app = FastAPI(
     title="Super Tutor API",
@@ -46,6 +47,7 @@ app.add_middleware(
 )
 
 app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
+app.include_router(chat.router, prefix="/chat", tags=["chat"])
 
 
 @app.get("/health")
