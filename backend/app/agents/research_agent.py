@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from agno.agent import Agent
-from agno.tools.duckduckgo import DuckDuckGoTools
+from agno.tools.tavily import TavilyTools
 
 from app.agents.model_factory import get_model
 
@@ -23,11 +23,11 @@ def build_research_agent() -> Agent:
     return Agent(
         name="ResearchAgent",
         model=get_model(),
-        tools=[DuckDuckGoTools(enable_search=True, enable_news=False, fixed_max_results=5)],
+        tools=[TavilyTools()],
         instructions="""You are a research assistant. When given a topic, perform web research and synthesize findings.
 
 Steps:
-1. Run 2-3 targeted DuckDuckGo searches on the topic using different query angles.
+1. Run 2-3 targeted Tavily searches on the topic using different query angles.
 2. Read and synthesize the results into a comprehensive content body of at least 600 words.
 3. Collect the source URLs from your searches.
 
