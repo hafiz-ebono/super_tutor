@@ -14,6 +14,8 @@ from app.workflows.session_workflow import build_workflow, _parse_json_safe
 from app.agents.flashcard_agent import build_flashcard_agent
 from app.agents.quiz_agent import build_quiz_agent
 from app.agents.research_agent import run_research
+from app.config import get_settings
+from app.utils.retry import run_with_retry, is_retryable
 
 logger = logging.getLogger("super_tutor.sessions")
 
@@ -104,9 +106,13 @@ async def stream_session(session_id: str):
                     result = run_research(topic_description, focus_prompt)
                 except Exception as e:
                     logger.error("Research failed — session_id=%s error=%s", session_id, e, exc_info=True)
+                    if is_retryable(e):
+                        research_msg = "The AI is temporarily busy — please try again in a moment."
+                    else:
+                        research_msg = "Research failed. Please try again."
                     yield {
                         "event": "error",
-                        "data": json.dumps({"kind": "empty", "message": f"Research failed: {e}. Please try again."}),
+                        "data": json.dumps({"kind": "empty", "message": research_msg}),
                     }
                     return
 
@@ -190,9 +196,13 @@ async def stream_session(session_id: str):
 
         except Exception as e:
             logger.error("Workflow error — session_id=%s error=%s", session_id, e, exc_info=True)
+            if is_retryable(e):
+                user_msg = "The AI is temporarily busy — please try again in a moment."
+            else:
+                user_msg = "Something went wrong generating your session. Please try again."
             yield {
                 "event": "error",
-                "data": json.dumps({"kind": "empty", "message": str(e)}),
+                "data": json.dumps({"kind": "empty", "message": user_msg}),
             }
 
     return EventSourceResponse(event_generator())
@@ -208,9 +218,13 @@ async def regenerate_section(session_id: str, section: str, body: RegenerateRequ
 
     logger.info("Generating %s — session_id=%s tutoring_type=%s", section, session_id, body.tutoring_type)
 
+    settings = get_settings()
     if section == "flashcards":
         agent = build_flashcard_agent(body.tutoring_type)
-        result = await asyncio.to_thread(agent.run, input_text)
+        result = await asyncio.to_thread(
+            run_with_retry, agent.run, input_text,
+            max_attempts=settings.agent_max_retries
+        )
         new_items = _parse_json_safe(result.content or "[]", [])
         if not new_items:
             raise HTTPException(status_code=500, detail="Generation returned empty response")
@@ -218,7 +232,10 @@ async def regenerate_section(session_id: str, section: str, body: RegenerateRequ
         return {"flashcards": new_items}
     else:
         agent = build_quiz_agent(body.tutoring_type)
-        result = await asyncio.to_thread(agent.run, input_text)
+        result = await asyncio.to_thread(
+            run_with_retry, agent.run, input_text,
+            max_attempts=settings.agent_max_retries
+        )
         new_items = _parse_json_safe(result.content or "[]", [])
         if not new_items:
             raise HTTPException(status_code=500, detail="Generation returned empty response")

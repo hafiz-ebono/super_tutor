@@ -9,6 +9,8 @@ from agno.agent import Agent
 from agno.tools.tavily import TavilyTools
 
 from app.agents.model_factory import get_model
+from app.config import get_settings
+from app.utils.retry import run_with_retry
 
 logger = logging.getLogger("super_tutor.research")
 
@@ -67,7 +69,11 @@ def run_research(topic: str, focus_prompt: str = "") -> ResearchResult:
 
     logger.info("Research start — topic=%r focus=%r", topic[:80], focus_prompt[:40] if focus_prompt else "")
     _t = time.perf_counter()
-    response = agent.run(input_text)
+    settings = get_settings()
+    response = run_with_retry(
+        agent.run, input_text,
+        max_attempts=settings.agent_max_retries
+    )
     raw = response.content if hasattr(response, "content") else str(response)
 
     data = _parse_json_safe(raw)

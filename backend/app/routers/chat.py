@@ -50,6 +50,11 @@ async def chat_stream(request: ChatStreamRequest):
             yield {"event": "done", "data": json.dumps({})}
         except Exception as e:
             logger.error("Chat stream error: %s", e, exc_info=True)
-            yield {"event": "error", "data": json.dumps({"error": str(e)})}
+            from app.utils.retry import is_retryable
+            if is_retryable(e):
+                user_message = "The AI is temporarily busy — please try again in a moment."
+            else:
+                user_message = "Something went wrong. Please try again."
+            yield {"event": "error", "data": json.dumps({"error": user_message})}
 
     return EventSourceResponse(event_generator())

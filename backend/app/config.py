@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     agent_provider: str = "openai"     # openai | anthropic | groq | openrouter
     agent_model: str = "gpt-4o"        # model ID valid for chosen provider
     agent_api_key: str = ""            # single key for whichever provider is active
+    agent_fallback_model: str = ""     # optional fallback model ID (same provider/key)
+    agent_max_retries: int = 3         # max attempts before giving up
 
     # URL extraction
     jina_api_key: str = ""

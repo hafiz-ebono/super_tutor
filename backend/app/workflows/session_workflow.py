@@ -19,6 +19,8 @@ from typing import AsyncIterator, Any
 
 from agno.agent import Agent
 from app.agents.model_factory import get_model
+from app.config import get_settings
+from app.utils.retry import run_with_retry
 
 logger = logging.getLogger("super_tutor.workflow")
 from app.agents.notes_agent import build_notes_agent
@@ -53,7 +55,7 @@ def _generate_title(text: str, fallback: str = "") -> str:
     )
     try:
         logger.debug("Title generation start")
-        result = agent.run(text[:800])
+        result = run_with_retry(agent.run, text[:800])
         title = (result.content or "").strip().strip('"').strip("'")
         if title:
             logger.debug("Title generation done — title=%r", title)
@@ -106,7 +108,11 @@ class SessionWorkflow:
         yield RunResponse(content="Crafting your notes...")
         logger.info("Workflow step start — step=notes tutoring_type=%s", tutoring_type)
         _t = time.perf_counter()
-        notes_result = await asyncio.to_thread(self.notes_agent.run, input_text)
+        settings = get_settings()
+        notes_result = await asyncio.to_thread(
+            run_with_retry, self.notes_agent.run, input_text,
+            max_attempts=settings.agent_max_retries
+        )
         logger.info("Workflow step done — step=notes elapsed=%.2fs", time.perf_counter() - _t)
         notes = notes_result.content or ""
         if len(notes.strip()) < 100:
