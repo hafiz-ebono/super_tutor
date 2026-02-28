@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
@@ -61,6 +61,9 @@ export default function StudyPage() {
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   function toggleFlip(index: number) {
     setFlippedCards((prev) => {
       const next = new Set(prev);
@@ -69,6 +72,20 @@ export default function StudyPage() {
       return next;
     });
   }
+
+  // Auto-scroll chat to bottom when chatHistory changes
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory]);
+
+  // Auto-focus textarea when chat panel opens
+  useEffect(() => {
+    if (chatOpen) {
+      // Small timeout to allow panel transition to start before focusing
+      const t = setTimeout(() => textareaRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [chatOpen]);
 
   // Load session from localStorage
   useEffect(() => {
@@ -270,7 +287,7 @@ export default function StudyPage() {
       )}
 
       {/* Desktop sidebar — hidden on mobile */}
-      <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-zinc-100 px-3 py-5">
+      <aside className="hidden lg:flex w-52 shrink-0 flex-col border-r border-zinc-100 px-3 py-5">
         <div className="mb-5 px-2">
           <p className="font-semibold text-zinc-900 text-sm leading-snug mb-2">
             {session.source_title}
@@ -311,7 +328,7 @@ export default function StudyPage() {
       <div className="flex flex-col flex-1 min-w-0">
 
         {/* Mobile meta-header — hidden on desktop */}
-        <div className="md:hidden flex flex-col gap-1.5 px-5 py-3 border-b border-zinc-100">
+        <div className="lg:hidden flex flex-col gap-1.5 px-5 py-3 border-b border-zinc-100">
           <p className="font-semibold text-zinc-900 text-sm leading-snug truncate">
             {session.source_title}
           </p>
@@ -321,7 +338,7 @@ export default function StudyPage() {
         </div>
 
         {/* Main content */}
-        <main className={`flex-1 px-6 py-8 md:pb-8 pb-24 transition-all duration-300 ${chatOpen ? "md:mr-[360px]" : ""}`}>
+        <main className={`flex-1 px-6 py-8 md:pb-8 pb-24 transition-all duration-300 ${chatOpen ? "lg:mr-[360px]" : ""}`}>
 
           {/* AI-researched disclaimer — topic sessions only */}
           {session.session_type === "topic" && (
@@ -563,7 +580,7 @@ export default function StudyPage() {
 
         {/* Mobile bottom tab bar — hidden on desktop */}
         <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 flex z-50"
+          className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 flex z-50"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
           {(["notes", "flashcards", "quiz"] as Tab[]).map((tab) => (
@@ -590,7 +607,7 @@ export default function StudyPage() {
           <button
             onClick={() => setChatOpen((o) => !o)}
             aria-label="Open chat"
-            className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[60] w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg flex items-center justify-center transition-colors"
+            className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-[60] w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg flex items-center justify-center transition-colors"
           >
             {chatOpen ? (
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -605,7 +622,7 @@ export default function StudyPage() {
 
           {/* Sliding chat panel */}
           <div
-            className={`fixed top-0 right-0 h-[calc(100vh-56px)] w-full md:w-[360px] bg-white border-l border-zinc-200 shadow-xl z-[55] flex flex-col transition-transform duration-300 ${
+            className={`fixed top-0 right-0 h-[calc(100vh-56px)] w-full lg:w-[360px] bg-white border-l border-zinc-200 shadow-xl z-[55] flex flex-col transition-transform duration-300 ${
               chatOpen ? "translate-x-0" : "translate-x-full"
             }`}
             style={{ top: "56px" }}
@@ -653,13 +670,20 @@ export default function StudyPage() {
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input area */}
             <div className="shrink-0 px-3 py-3 border-t border-zinc-100 flex gap-2 items-end">
               <textarea
+                ref={textareaRef}
                 value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
+                onChange={(e) => {
+                  setChatInput(e.target.value);
+                  const el = e.target;
+                  el.style.height = "auto";
+                  el.style.height = `${el.scrollHeight}px`;
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();

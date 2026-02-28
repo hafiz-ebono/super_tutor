@@ -121,11 +121,11 @@ function CreateForm() {
         </fieldset>
 
         {/* Input mode toggle */}
-        <div className="flex rounded-lg border border-zinc-200 overflow-hidden self-start">
+        <div className="flex rounded-lg border border-zinc-200 overflow-hidden w-full sm:w-auto">
           <button
             type="button"
             onClick={() => { setInputMode("url"); setTopicDescription(""); }}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-colors ${
               inputMode === "url" ? "bg-zinc-900 text-white" : "bg-white text-zinc-500 hover:bg-zinc-50"
             }`}
           >
@@ -134,7 +134,7 @@ function CreateForm() {
           <button
             type="button"
             onClick={() => { setInputMode("topic"); setUrl(""); }}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-colors ${
               inputMode === "topic" ? "bg-zinc-900 text-white" : "bg-white text-zinc-500 hover:bg-zinc-50"
             }`}
           >
@@ -236,7 +236,7 @@ function CreateForm() {
 
         <button
           type="submit"
-          className="self-start px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-full sm:w-auto sm:self-start px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           disabled={
             !selectedMode ||
             isSubmitting ||

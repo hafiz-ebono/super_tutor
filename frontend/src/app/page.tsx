@@ -26,7 +26,7 @@ export default function LandingPage() {
   return (
     <main>
       {/* Hero */}
-      <section className="max-w-3xl mx-auto px-5 pt-20 pb-20 flex flex-col items-center text-center">
+      <section className="max-w-3xl mx-auto px-5 pt-12 sm:pt-20 pb-12 sm:pb-20 flex flex-col items-center text-center">
         <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">
           AI-powered study companion
         </p>
