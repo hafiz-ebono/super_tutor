@@ -5,6 +5,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SessionResult, TutoringType } from "@/types/session";
+import { useRecentSessions } from "@/app/hooks/useRecentSessions";
 
 const MODE_LABELS: Record<TutoringType, string> = {
   micro_learning: "Micro Learning",
@@ -46,6 +47,18 @@ export default function StudyPage() {
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [quizPhase, setQuizPhase] = useState<"answering" | "reviewing">("answering");
+  const [flippedCards, setFlippedCards] = useState<Set<number>>(new Set());
+
+  const { saveSession, evictionToast } = useRecentSessions();
+
+  function toggleFlip(index: number) {
+    setFlippedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -210,17 +223,31 @@ export default function StudyPage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {session.flashcards.map((card, i) => (
-                    <article
+                    <div
                       key={i}
-                      className="border border-zinc-200 rounded-xl p-5 bg-white min-h-[100px] flex flex-col justify-between"
+                      className={`flashcard-scene${flippedCards.has(i) ? " is-flipped" : ""}`}
+                      style={{ minHeight: "120px", cursor: "pointer" }}
+                      onClick={() => toggleFlip(i)}
+                      role="button"
+                      aria-label={`Flashcard ${i + 1}: ${flippedCards.has(i) ? "showing answer, click to flip back" : "click to reveal answer"}`}
                     >
-                      <p className="font-medium text-zinc-900 text-sm leading-relaxed">
-                        {card.front}
-                      </p>
-                      <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
-                        {card.back}
-                      </p>
-                    </article>
+                      <div className="flashcard-inner">
+                        <div className="flashcard-front">
+                          <p className="font-medium text-zinc-900 text-sm leading-relaxed">
+                            {card.front}
+                          </p>
+                          <p className="text-xs text-zinc-400 mt-auto pt-2">Click to reveal answer</p>
+                        </div>
+                        <div className="flashcard-back">
+                          <p className="font-medium text-zinc-900 text-sm leading-relaxed">
+                            {card.front}
+                          </p>
+                          <p className="text-xs text-zinc-600 mt-3 leading-relaxed border-t border-zinc-100 pt-3">
+                            {card.back}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
