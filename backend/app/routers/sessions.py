@@ -9,7 +9,9 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.models.session import SessionRequest
 from app.extraction.chain import extract_content, ExtractionError
-from app.workflows.session_workflow import build_workflow
+from app.workflows.session_workflow import build_workflow, _parse_json_safe
+from app.agents.flashcard_agent import build_flashcard_agent
+from app.agents.quiz_agent import build_quiz_agent
 from app.agents.research_agent import run_research
 
 logger = logging.getLogger("super_tutor.sessions")
@@ -202,3 +204,44 @@ async def get_session(session_id: str):
     if session_id not in SESSION_STORE:
         raise HTTPException(status_code=404, detail="Session not found or not yet complete")
     return SESSION_STORE[session_id]
+
+
+@router.post("/{session_id}/regenerate/{section}")
+async def regenerate_section(session_id: str, section: str):
+    """Re-runs a single failed agent (flashcards or quiz) using the stored notes."""
+    if session_id not in SESSION_STORE:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if section not in ("flashcards", "quiz"):
+        raise HTTPException(status_code=400, detail="section must be 'flashcards' or 'quiz'")
+
+    session = SESSION_STORE[session_id]
+    notes = session.get("notes", "")
+    tutoring_type = session.get("tutoring_type", "micro_learning")
+    input_text = f"Content:\n{notes}"
+
+    logger.info("Regenerating %s — session_id=%s", section, session_id)
+
+    if section == "flashcards":
+        agent = build_flashcard_agent(tutoring_type)
+        result = await asyncio.to_thread(agent.run, input_text)
+        new_items = _parse_json_safe(result.content or "[]", [])
+        if not new_items:
+            raise HTTPException(status_code=500, detail="Regeneration returned empty response")
+        updated = {**session, "flashcards": new_items}
+        errors = {k: v for k, v in (session.get("errors") or {}).items() if k != "flashcards"}
+        updated["errors"] = errors if errors else None
+        SESSION_STORE[session_id] = updated
+        logger.info("Regeneration complete — session_id=%s section=flashcards count=%d", session_id, len(new_items))
+        return {"flashcards": new_items}
+    else:
+        agent = build_quiz_agent(tutoring_type)
+        result = await asyncio.to_thread(agent.run, input_text)
+        new_items = _parse_json_safe(result.content or "[]", [])
+        if not new_items:
+            raise HTTPException(status_code=500, detail="Regeneration returned empty response")
+        updated = {**session, "quiz": new_items}
+        errors = {k: v for k, v in (session.get("errors") or {}).items() if k != "quiz"}
+        updated["errors"] = errors if errors else None
+        SESSION_STORE[session_id] = updated
+        logger.info("Regeneration complete — session_id=%s section=quiz count=%d", session_id, len(new_items))
+        return {"quiz": new_items}

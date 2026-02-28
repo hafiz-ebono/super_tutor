@@ -114,21 +114,17 @@ export default function StudyPage() {
     setRetryingFlashcards(true);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-      const res = await fetch(`${apiUrl}/sessions/${sessionId}`);
-      if (!res.ok) throw new Error("Session not found");
-      const refreshed = await res.json();
-      if (refreshed.flashcards && refreshed.flashcards.length > 0) {
-        setSession((prev) => {
-          if (!prev) return prev;
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { flashcards: _fc, ...restErrors } = prev.errors ?? {};
-          return { ...prev, flashcards: refreshed.flashcards, errors: restErrors };
-        });
-        setRetryToast("Flashcards ready!");
-        setTimeout(() => setRetryToast(null), 3000);
-      } else {
-        throw new Error("Still empty");
-      }
+      const res = await fetch(`${apiUrl}/sessions/${sessionId}/regenerate/flashcards`, { method: "POST" });
+      if (!res.ok) throw new Error("Regeneration failed");
+      const data = await res.json();
+      setSession((prev) => {
+        if (!prev) return prev;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { flashcards: _fc, ...restErrors } = prev.errors ?? {};
+        return { ...prev, flashcards: data.flashcards, errors: restErrors };
+      });
+      setRetryToast("Flashcards ready!");
+      setTimeout(() => setRetryToast(null), 3000);
     } catch {
       // Keep error state — retry button stays visible
     } finally {
@@ -141,22 +137,18 @@ export default function StudyPage() {
     setRetryingQuiz(true);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-      const res = await fetch(`${apiUrl}/sessions/${sessionId}`);
-      if (!res.ok) throw new Error("Session not found");
-      const refreshed = await res.json();
-      if (refreshed.quiz && refreshed.quiz.length > 0) {
-        setSession((prev) => {
-          if (!prev) return prev;
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { quiz: _q, ...restErrors } = prev.errors ?? {};
-          return { ...prev, quiz: refreshed.quiz, errors: restErrors };
-        });
-        setAnswers(new Array(refreshed.quiz.length).fill(null));
-        setRetryToast("Quiz ready!");
-        setTimeout(() => setRetryToast(null), 3000);
-      } else {
-        throw new Error("Still empty");
-      }
+      const res = await fetch(`${apiUrl}/sessions/${sessionId}/regenerate/quiz`, { method: "POST" });
+      if (!res.ok) throw new Error("Regeneration failed");
+      const data = await res.json();
+      setSession((prev) => {
+        if (!prev) return prev;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { quiz: _q, ...restErrors } = prev.errors ?? {};
+        return { ...prev, quiz: data.quiz, errors: restErrors };
+      });
+      setAnswers(new Array(data.quiz.length).fill(null));
+      setRetryToast("Quiz ready!");
+      setTimeout(() => setRetryToast(null), 3000);
     } catch {
       // Keep error state — retry button stays visible
     } finally {
@@ -247,7 +239,7 @@ export default function StudyPage() {
         </div>
 
         {/* Main content */}
-        <main className="flex-1 px-6 py-8 max-w-3xl md:pb-8 pb-24">
+        <main className="flex-1 px-6 py-8 md:pb-8 pb-24">
 
           {/* AI-researched disclaimer — topic sessions only */}
           {session.session_type === "topic" && (
