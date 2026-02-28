@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 Phase: 4 of 5 (Chat Backend)
 Plan: 1 of ? in current phase
 Status: In progress
-Last activity: 2026-02-28 - Completed quick task 2: Migrate research agent from DuckDuckGo to Tavily for web search
+Last activity: 2026-03-01 - Completed quick task 3: Title agent error fallback to user input
 
 Progress: [████████░░] 80% (v1.0 complete, v2.0 not started)
 
@@ -69,9 +69,10 @@ None identified for v2.0 phases.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 2 | Migrate research agent from DuckDuckGo to Tavily for web search | 2026-02-28 | e7f7b33 | [2-migrate-research-agent-from-duckduckgo-t](./quick/2-migrate-research-agent-from-duckduckgo-t/) |
+| 3 | Title agent error fallback to user input (topic_description or URL) | 2026-03-01 | a5c670f | [3-title-agent-error-fallback-to-user-input](./quick/3-title-agent-error-fallback-to-user-input/) |
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Completed 04-01-PLAN.md (chat models + agent builder)
+Last session: 2026-03-01
+Stopped at: Completed quick-3 (title agent error fallback to user input)
 Resume file: None

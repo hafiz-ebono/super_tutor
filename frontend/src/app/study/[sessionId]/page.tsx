@@ -56,6 +56,11 @@ export default function StudyPage() {
 
   const { saveSession, evictionToast } = useRecentSessions();
 
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+
   function toggleFlip(index: number) {
     setFlippedCards((prev) => {
       const next = new Set(prev);
@@ -156,6 +161,80 @@ export default function StudyPage() {
       setCurrentQ((q) => q + 1);
     } else {
       setQuizPhase("reviewing");
+    }
+  }
+
+  async function sendMessage() {
+    if (!session || !chatInput.trim() || isStreaming) return;
+    const userMessage = chatInput.trim();
+    setChatInput("");
+    // Optimistically add user turn
+    const history = [...chatHistory, { role: "user" as const, content: userMessage }];
+    setChatHistory(history);
+    setIsStreaming(true);
+
+    // Add empty assistant placeholder
+    setChatHistory((prev) => [...prev, { role: "assistant" as const, content: "" }]);
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMessage,
+          notes: session.notes,
+          tutoring_type: session.tutoring_type,
+          // Send last 6 prior turns (client-side cap; backend is stateless)
+          history: history.slice(0, -1).slice(-6),
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error("Stream request failed");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? ""; // keep incomplete last line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+          try {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed.token === "string") {
+              setChatHistory((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last && last.role === "assistant") {
+                  next[next.length - 1] = { ...last, content: last.content + parsed.token };
+                }
+                return next;
+              });
+            }
+          } catch {
+            // Ignore non-JSON data lines (e.g. event: done line)
+          }
+        }
+      }
+    } catch {
+      // Replace empty assistant placeholder with error message
+      setChatHistory((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last && last.role === "assistant" && last.content === "") {
+          next[next.length - 1] = { ...last, content: "Sorry, something went wrong. Please try again." };
+        }
+        return next;
+      });
+    } finally {
+      setIsStreaming(false);
     }
   }
 
