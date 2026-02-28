@@ -13,7 +13,5 @@ EXPOSE 3000
 
 # Disable Next.js telemetry
 ENV NEXT_TELEMETRY_DISABLED=1
-# Required for Next.js dev server to listen on all interfaces inside Docker
-ENV HOSTNAME=0.0.0.0
 
-CMD ["npm", "run", "dev"]
+CMD ["npx", "next", "dev", "--hostname", "0.0.0.0"]
