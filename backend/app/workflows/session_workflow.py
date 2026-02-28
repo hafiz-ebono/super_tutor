@@ -116,7 +116,7 @@ class SessionWorkflow:
 
         # Final: AI-generated title from the most focused signal available.
         # _generate_title is synchronous and runs safely inside the thread pool thread.
-        source_title = await asyncio.to_thread(_generate_title, title_input if title_input else content)
+        source_title = await asyncio.to_thread(_generate_title, title_input if title_input else content, title_input or url)
         yield RunResponse(
             event="workflow_completed",
             content={
