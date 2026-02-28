@@ -321,7 +321,7 @@ export default function StudyPage() {
         </div>
 
         {/* Main content */}
-        <main className="flex-1 px-6 py-8 md:pb-8 pb-24">
+        <main className={`flex-1 px-6 py-8 md:pb-8 pb-24 transition-all duration-300 ${chatOpen ? "md:mr-[360px]" : ""}`}>
 
           {/* AI-researched disclaimer — topic sessions only */}
           {session.session_type === "topic" && (
@@ -583,6 +583,110 @@ export default function StudyPage() {
         </nav>
 
       </div>
+
+      {session && session.notes && (
+        <>
+          {/* Floating chat bubble */}
+          <button
+            onClick={() => setChatOpen((o) => !o)}
+            aria-label="Open chat"
+            className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[60] w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg flex items-center justify-center transition-colors"
+          >
+            {chatOpen ? (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z" />
+              </svg>
+            )}
+          </button>
+
+          {/* Sliding chat panel */}
+          <div
+            className={`fixed top-0 right-0 h-full w-full md:w-[360px] bg-white border-l border-zinc-200 shadow-xl z-[55] flex flex-col transition-transform duration-300 ${
+              chatOpen ? "translate-x-0" : "translate-x-full"
+            }`}
+            style={{ top: "56px" }}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 shrink-0">
+              <span className="text-sm font-semibold text-zinc-900">Ask about this session</span>
+              <button
+                onClick={() => setChatOpen(false)}
+                aria-label="Close chat"
+                className="text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Message list */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+              {chatHistory.length === 0 && (
+                <p className="text-xs text-zinc-400 text-center mt-8">
+                  Ask anything about the session content.
+                </p>
+              )}
+              {chatHistory.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-blue-600 text-white rounded-br-sm"
+                        : "bg-zinc-100 text-zinc-900 rounded-bl-sm"
+                    }`}
+                  >
+                    {msg.content || (
+                      <span className="inline-flex gap-0.5 items-center h-4">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Input area */}
+            <div className="shrink-0 px-3 py-3 border-t border-zinc-100 flex gap-2 items-end">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                disabled={isStreaming}
+                placeholder="Ask a question..."
+                rows={1}
+                className="flex-1 resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-blue-400 focus:bg-white transition-colors disabled:opacity-50"
+                style={{ maxHeight: "120px" }}
+              />
+              <button
+                onClick={sendMessage}
+                disabled={isStreaming || !chatInput.trim()}
+                aria-label="Send"
+                className="shrink-0 w-9 h-9 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L15 22 11 13 2 9l20-7z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
