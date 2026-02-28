@@ -1,4 +1,6 @@
+"use client";
 import Link from "next/link";
+import { useRecentSessions } from "@/app/hooks/useRecentSessions";
 
 const FEATURES = [
   {
@@ -19,6 +21,8 @@ const FEATURES = [
 ];
 
 export default function LandingPage() {
+  const { sessions } = useRecentSessions();
+
   return (
     <main>
       {/* Hero */}
@@ -62,6 +66,31 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* Recent sessions */}
+      {sessions.length > 0 && (
+        <section className="max-w-3xl mx-auto px-5 pt-8 pb-16 border-t border-zinc-100">
+          <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-4">
+            Recent sessions
+          </h2>
+          <div className="flex flex-col gap-2">
+            {sessions.map((s) => (
+              <Link
+                key={s.session_id}
+                href={`/study/${s.session_id}`}
+                className="flex items-center justify-between px-4 py-3 border border-zinc-200 rounded-xl bg-white hover:border-zinc-300 hover:bg-zinc-50 transition-colors group"
+              >
+                <span className="text-sm font-medium text-zinc-900 truncate max-w-[70%]">
+                  {s.source_title}
+                </span>
+                <span className="text-xs text-zinc-400 shrink-0 ml-3">
+                  {new Date(s.saved_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

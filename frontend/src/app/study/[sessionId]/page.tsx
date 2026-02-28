@@ -70,6 +70,12 @@ export default function StudyPage() {
       .then((data: SessionResult) => {
         setSession(data);
         setAnswers(new Array(data.quiz.length).fill(null));
+        saveSession({
+          session_id: data.session_id,
+          source_title: data.source_title,
+          tutoring_type: data.tutoring_type,
+          session_type: data.session_type ?? "url",
+        });
         setLoading(false);
       })
       .catch((e) => {
@@ -118,6 +124,11 @@ export default function StudyPage() {
 
   return (
     <div className="flex" style={{ minHeight: "calc(100vh - 56px)" }}>
+      {evictionToast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg">
+          Your oldest session was removed to make space
+        </div>
+      )}
 
       {/* Desktop sidebar — hidden on mobile */}
       <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-zinc-100 px-3 py-5">
