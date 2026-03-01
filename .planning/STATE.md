@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 Phase: 4 of 5 (Chat Backend)
 Plan: 1 of ? in current phase
 Status: In progress
-Last activity: 2026-03-01 - Completed quick task 4: Chat UI — floating bubble and sliding pane
+Last activity: 2026-03-01 - Completed quick task 6: LLM retry + rate limit handling with tenacity
 
 Progress: [████████░░] 80% (v1.0 complete, v2.0 not started)
 
@@ -71,9 +71,11 @@ None identified for v2.0 phases.
 | 2 | Migrate research agent from DuckDuckGo to Tavily for web search | 2026-02-28 | e7f7b33 | [2-migrate-research-agent-from-duckduckgo-t](./quick/2-migrate-research-agent-from-duckduckgo-t/) |
 | 3 | Title agent error fallback to user input (topic_description or URL) | 2026-03-01 | a5c670f | [3-title-agent-error-fallback-to-user-input](./quick/3-title-agent-error-fallback-to-user-input/) |
 | 4 | Chat UI — floating bubble and sliding pane with SSE streaming | 2026-03-01 | 3f721e3 | [4-chat-ui-floating-bubble-and-sliding-pane](./quick/4-chat-ui-floating-bubble-and-sliding-pane/) |
+| 5 | Responsive UI polish — lg breakpoints, chat auto-scroll/focus/resize, mobile create page | 2026-03-01 | ce21673 | [5-responsive-ui-polish-all-pages-all-devic](./quick/5-responsive-ui-polish-all-pages-all-devic/) |
+| 6 | LLM retry + rate limit handling with tenacity exponential backoff and friendly error messages | 2026-03-01 | ec90347 | [6-llm-rate-limit-handling-retry-backoff-mo](./quick/6-llm-rate-limit-handling-retry-backoff-mo/) |
 
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed quick-4 (chat UI — floating bubble and sliding pane with SSE streaming)
+Stopped at: Completed quick-6 (LLM retry + rate limit handling with tenacity)
 Resume file: None

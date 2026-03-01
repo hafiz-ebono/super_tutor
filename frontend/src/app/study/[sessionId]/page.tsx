@@ -57,7 +57,14 @@ export default function StudyPage() {
   const { saveSession, evictionToast } = useRecentSessions();
 
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; content: string }[]>(() => {
+    try {
+      const stored = localStorage.getItem(`chat:${sessionId}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -72,6 +79,13 @@ export default function StudyPage() {
       return next;
     });
   }
+
+  // Persist chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      localStorage.setItem(`chat:${sessionId}`, JSON.stringify(chatHistory));
+    }
+  }, [chatHistory, sessionId]);
 
   // Auto-scroll chat to bottom when chatHistory changes
   useEffect(() => {
@@ -179,6 +193,11 @@ export default function StudyPage() {
     } else {
       setQuizPhase("reviewing");
     }
+  }
+
+  function resetChat() {
+    setChatHistory([]);
+    localStorage.removeItem(`chat:${sessionId}`);
   }
 
   async function sendMessage() {
@@ -630,15 +649,29 @@ export default function StudyPage() {
             {/* Panel header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 shrink-0">
               <span className="text-sm font-semibold text-zinc-900">Ask about this session</span>
-              <button
-                onClick={() => setChatOpen(false)}
-                aria-label="Close chat"
-                className="text-zinc-400 hover:text-zinc-600 transition-colors"
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={resetChat}
+                  disabled={chatHistory.length === 0 || isStreaming}
+                  aria-label="Reset chat"
+                  title="Clear chat history"
+                  className="text-zinc-400 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M1 4v6h6M23 20v-6h-6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setChatOpen(false)}
+                  aria-label="Close chat"
+                  className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* Message list */}
