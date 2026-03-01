@@ -61,9 +61,10 @@ None.
 | 4 | Chat UI — floating bubble and sliding pane with SSE streaming | 2026-03-01 | 3f721e3 | [4-chat-ui-floating-bubble-and-sliding-pane](./quick/4-chat-ui-floating-bubble-and-sliding-pane/) |
 | 5 | Responsive UI polish — lg breakpoints, chat auto-scroll/focus/resize, mobile create page | 2026-03-01 | ce21673 | [5-responsive-ui-polish-all-pages-all-devic](./quick/5-responsive-ui-polish-all-pages-all-devic/) |
 | 6 | LLM retry + rate limit handling with tenacity exponential backoff and friendly error messages | 2026-03-01 | ec90347 | [6-llm-rate-limit-handling-retry-backoff-mo](./quick/6-llm-rate-limit-handling-retry-backoff-mo/) |
+| 7 | Persist generated flashcards and quiz to localStorage — survive page refresh | 2026-03-01 | 20ea4a4 | [7-persist-generated-flashcards-and-quiz-to](./quick/7-persist-generated-flashcards-and-quiz-to/) |
 
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: v2.0 milestone archived. Ready for /gsd:new-milestone
+Stopped at: Completed quick-7 — flashcard and quiz persistence hardened
 Resume file: None
