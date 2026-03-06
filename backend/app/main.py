@@ -45,9 +45,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_control_plane_origins = ["https://os.agno.com", "https://app.agno.com"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=[*settings.allowed_origins, *_control_plane_origins],
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
