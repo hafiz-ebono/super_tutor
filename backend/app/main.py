@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -24,6 +25,11 @@ async def lifespan(app: FastAPI):
         settings.agent_provider,
         settings.agent_model,
         settings.allowed_origins,
+    )
+    logger.info(
+        "AgentOS Control Plane — monitoring=%s api_key_set=%s",
+        os.environ.get("AGNO_TELEMETRY", "true"),
+        bool(os.environ.get("AGNO_API_KEY")),
     )
     yield
     logger.info("Super Tutor API shutting down")

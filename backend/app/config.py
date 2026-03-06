@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     # Trace storage — SQLite db for AgentOS run traces
     trace_db_path: str = "tmp/super_tutor_traces.db"  # override with TRACE_DB_PATH env var
 
-    # Agno Control Plane — remote monitoring at app.agno.com (Phase 7)
+    # Agno Control Plane — remote telemetry at app.agno.com (Phase 7)
     agno_api_key: str = ""            # set AGNO_API_KEY env var; get from app.agno.com
-    agno_monitor: bool = False        # set AGNO_MONITOR=true to enable remote session reporting
+    agno_telemetry: bool = True       # set AGNO_TELEMETRY=false to disable; SDK reads this env var
 
     # URL extraction
     jina_api_key: str = ""
