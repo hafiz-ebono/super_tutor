@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     agent_fallback_model: str = ""     # optional fallback model ID (same provider/key)
     agent_max_retries: int = 3         # max attempts before giving up
 
+    # Trace storage — SQLite db for AgentOS run traces
+    trace_db_path: str = "tmp/super_tutor_traces.db"  # override with TRACE_DB_PATH env var
+
     # URL extraction
     jina_api_key: str = ""
 
