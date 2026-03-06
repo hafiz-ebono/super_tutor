@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-06 after v3.0 milestone start)
 ## Current Position
 
 Phase: 6 — AgentOS Core Integration
-Plan: 2 of N complete
-Status: In progress — 06-02 complete
-Last activity: 2026-03-06 — 06-02 complete (AgentOS wrapping + db= parameter injection)
+Plan: 3 of N complete
+Status: In progress — 06-03 complete
+Last activity: 2026-03-06 — 06-03 complete (session_id threading + retry log visibility)
 
-Progress: [██░░░░░░░░] Phase 6 plan 2 complete
+Progress: [███░░░░░░░] Phase 6 plan 3 complete
 
 ## Performance Metrics
 
@@ -32,7 +32,7 @@ Progress: [██░░░░░░░░] Phase 6 plan 2 complete
 | 03-study-experience-polish | 5 | ~10min | ~2min |
 | 04-chat-backend | 1 | ~2min | ~2min |
 | 05-chat-frontend | 3 | ~6min | ~2min |
-| 06-agentos-core-integration | 2 (in progress) | ~8min | ~4min |
+| 06-agentos-core-integration | 3 (in progress) | ~11min | ~4min |
 
 **Recent Trend:**
 - Last 5 plans: 03-01 (2min), 03-02 (2min), 03-03 (2min), 03-04 (2min), 03-05 (2min)
@@ -56,6 +56,12 @@ Decisions are logged in PROJECT.md Key Decisions table (fully updated after v2.0
 - sqlalchemy added to requirements.txt — agno.db.sqlite imports it at module level; was missing
 - One representative NotesAgent in agents=[] to satisfy AgentOS startup; db= at call time in routers handles actual tracing
 - tracing=True OTEL warning is informational only — SQLite tracing works without OpenTelemetry packages
+
+**06-03 decisions:**
+- Lazy singleton pattern (_get_traces_db) used in both routers to avoid circular import from main.py while sharing same SQLite file and id="super_tutor_traces"
+- session_id: str = "" default in ChatStreamRequest ensures backward compatibility with existing frontend clients
+- run_with_retry already accepts **kwargs and forwards them to fn, so session_id flows to agent.run() without changes to retry utility signature
+- before_sleep_log coexists with existing manual logger.warning inside loop body — both fire at slightly different times
 
 ### v3.0 Key Context
 
@@ -89,6 +95,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 06-02-PLAN.md (AgentOS wrapping + db= parameter injection)
+Stopped at: Completed 06-03-PLAN.md (session_id threading + retry log visibility)
 Resume file: None
-Next step: Execute 06-03-PLAN.md
+Next step: Execute next plan in phase 06

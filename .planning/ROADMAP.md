@@ -31,7 +31,7 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 
 ### v3.0 AgentOS Observability
 
-- [ ] **Phase 6: AgentOS Core Integration** — Wrap FastAPI with AgentOS, wire all agents with db=, stand up SQLite trace storage, and validate full local tracing
+- [x] **Phase 6: AgentOS Core Integration** — Wrap FastAPI with AgentOS, wire all agents with db=, stand up SQLite trace storage, and validate full local tracing (completed 2026-03-06)
 - [ ] **Phase 7: Control Plane Connection** — Connect the backend to app.agno.com and verify agent runs, costs, and session data are visible in the Control Plane
 
 ## Phase Details
@@ -72,5 +72,5 @@ Plans:
 | 3. Study Experience Polish | v1.0 | 5/5 | Complete | 2026-02-28 |
 | 4. Chat Backend | v2.0 | 2/2 | Complete | 2026-03-01 |
 | 5. Chat Frontend | v2.0 | 2/2 | Complete | 2026-03-01 |
-| 6. AgentOS Core Integration | 2/3 | In Progress|  | - |
+| 6. AgentOS Core Integration | 3/3 | Complete   | 2026-03-06 | - |
 | 7. Control Plane Connection | v3.0 | 0/? | Not started | - |

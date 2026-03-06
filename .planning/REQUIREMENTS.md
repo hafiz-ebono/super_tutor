@@ -17,8 +17,8 @@ Requirements for AgentOS Observability milestone. Each maps to roadmap phases.
 
 - [x] **TRAC-01**: All agent runs produce traces (inputs, outputs, latency) stored in SQLite
 - [x] **TRAC-02**: LLM token usage and model metadata captured per agent run
-- [ ] **TRAC-03**: Errors and retry events (tenacity backoff) visible in traces
-- [ ] **TRAC-04**: Traces isolated per user session (no cross-session bleed)
+- [x] **TRAC-03**: Errors and retry events (tenacity backoff) visible in traces
+- [x] **TRAC-04**: Traces isolated per user session (no cross-session bleed)
 
 ### Storage
 
@@ -63,8 +63,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INT-03 | Phase 6 | Complete |
 | TRAC-01 | Phase 6 | Complete |
 | TRAC-02 | Phase 6 | Complete |
-| TRAC-03 | Phase 6 | Pending |
-| TRAC-04 | Phase 6 | Pending |
+| TRAC-03 | Phase 6 | Complete |
+| TRAC-04 | Phase 6 | Complete |
 | STOR-01 | Phase 6 | Complete |
 | STOR-02 | Phase 6 | Complete |
 | CTRL-01 | Phase 7 | Pending |
