@@ -16,6 +16,21 @@ from app.agents.quiz_agent import build_quiz_agent
 from app.agents.research_agent import run_research
 from app.config import get_settings
 from app.utils.retry import run_with_retry, is_retryable
+from agno.db.sqlite import SqliteDb
+
+
+def _get_traces_db() -> SqliteDb:
+    """Lazy singleton for the shared trace db — avoids circular import from main.py.
+    Uses the same db_file path and id='super_tutor_traces' as main.py and chat.py
+    so rows from all three SqliteDb objects land in the same SQLite table.
+    """
+    if not hasattr(_get_traces_db, "_instance"):
+        settings = get_settings()
+        _get_traces_db._instance = SqliteDb(
+            db_file=settings.trace_db_path,
+            id="super_tutor_traces",
+        )
+    return _get_traces_db._instance
 
 logger = logging.getLogger("super_tutor.sessions")
 
@@ -103,7 +118,7 @@ async def stream_session(session_id: str):
                 await asyncio.sleep(0)
 
                 try:
-                    result = run_research(topic_description, focus_prompt)
+                    result = run_research(topic_description, focus_prompt, session_id=session_id, db=_get_traces_db())
                 except Exception as e:
                     logger.error("Research failed — session_id=%s error=%s", session_id, e, exc_info=True)
                     if is_retryable(e):
@@ -161,7 +176,7 @@ async def stream_session(session_id: str):
             return
 
         # Step 2: Run the AI workflow, streaming progress events
-        workflow = build_workflow(tutoring_type)
+        workflow = build_workflow(tutoring_type, db=_get_traces_db())
 
         try:
             async for response in workflow.run(
@@ -172,6 +187,7 @@ async def stream_session(session_id: str):
                 session_type=session_type,
                 sources=sources,
                 title_input=title_input,
+                session_id=session_id,  # TRAC-04: isolate traces per session
             ):
                 # Check if this is the final completed response
                 event_name = getattr(response.event, "value", str(response.event)) if response.event else ""
@@ -220,10 +236,11 @@ async def regenerate_section(session_id: str, section: str, body: RegenerateRequ
 
     settings = get_settings()
     if section == "flashcards":
-        agent = build_flashcard_agent(body.tutoring_type)
+        agent = build_flashcard_agent(body.tutoring_type, db=_get_traces_db())
         result = await asyncio.to_thread(
             run_with_retry, agent.run, input_text,
-            max_attempts=settings.agent_max_retries
+            max_attempts=settings.agent_max_retries,
+            session_id=session_id,  # TRAC-04
         )
         new_items = _parse_json_safe(result.content or "[]", [])
         if not new_items:
@@ -231,10 +248,11 @@ async def regenerate_section(session_id: str, section: str, body: RegenerateRequ
         logger.info("Generation complete — session_id=%s section=flashcards count=%d", session_id, len(new_items))
         return {"flashcards": new_items}
     else:
-        agent = build_quiz_agent(body.tutoring_type)
+        agent = build_quiz_agent(body.tutoring_type, db=_get_traces_db())
         result = await asyncio.to_thread(
             run_with_retry, agent.run, input_text,
-            max_attempts=settings.agent_max_retries
+            max_attempts=settings.agent_max_retries,
+            session_id=session_id,  # TRAC-04
         )
         new_items = _parse_json_safe(result.content or "[]", [])
         if not new_items:

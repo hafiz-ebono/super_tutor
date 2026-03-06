@@ -59,12 +59,12 @@ def _parse_json_safe(raw: str) -> dict:
         return {}
 
 
-def run_research(topic: str, focus_prompt: str = "") -> ResearchResult:
+def run_research(topic: str, focus_prompt: str = "", session_id: str = "", db: SqliteDb | None = None) -> ResearchResult:
     """Run the research agent for a topic, returning synthesized content and source URLs.
 
     Raises on provider/network failures — callers should handle and emit an error event.
     """
-    agent = build_research_agent()
+    agent = build_research_agent(db=db)
     input_text = topic
     if focus_prompt:
         input_text = f"{topic}\n\nFocus on: {focus_prompt}"
@@ -74,7 +74,8 @@ def run_research(topic: str, focus_prompt: str = "") -> ResearchResult:
     settings = get_settings()
     response = run_with_retry(
         agent.run, input_text,
-        max_attempts=settings.agent_max_retries
+        max_attempts=settings.agent_max_retries,
+        session_id=session_id,  # TRAC-04: scope research agent trace to this session
     )
     raw = response.content if hasattr(response, "content") else str(response)
 

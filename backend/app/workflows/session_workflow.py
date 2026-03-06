@@ -45,7 +45,7 @@ def _extract_title(content: str, url: str = "") -> str:
     return url[:80] if url else "Untitled"
 
 
-def _generate_title(text: str, fallback: str = "", db: SqliteDb | None = None) -> str:
+def _generate_title(text: str, fallback: str = "", db: SqliteDb | None = None, session_id: str = "") -> str:
     """Ask the AI for a concise 3-5 word title. Falls back to fallback (truncated) or _extract_title on failure."""
     agent = Agent(
         model=get_model(),
@@ -57,7 +57,7 @@ def _generate_title(text: str, fallback: str = "", db: SqliteDb | None = None) -
     )
     try:
         logger.debug("Title generation start")
-        result = run_with_retry(agent.run, text[:800])
+        result = run_with_retry(agent.run, text[:800], session_id=session_id)
         title = (result.content or "").strip().strip('"').strip("'")
         if title:
             logger.debug("Title generation done — title=%r", title)
@@ -99,6 +99,7 @@ class SessionWorkflow:
         session_type: str = "url",
         sources: list | None = None,
         title_input: str = "",
+        session_id: str = "",
     ) -> AsyncIterator[RunResponse]:
         input_text = (
             f"Content:\n{content}\n\nFocus on: {focus_prompt}"
@@ -114,7 +115,8 @@ class SessionWorkflow:
         settings = get_settings()
         notes_result = await asyncio.to_thread(
             run_with_retry, self.notes_agent.run, input_text,
-            max_attempts=settings.agent_max_retries
+            max_attempts=settings.agent_max_retries,
+            session_id=session_id,  # TRAC-04: scope notes agent trace to this session
         )
         logger.info("Workflow step done — step=notes elapsed=%.2fs", time.perf_counter() - _t)
         notes = notes_result.content or ""
@@ -125,7 +127,7 @@ class SessionWorkflow:
 
         # Final: AI-generated title from the most focused signal available.
         # _generate_title is synchronous and runs safely inside the thread pool thread.
-        source_title = await asyncio.to_thread(_generate_title, title_input if title_input else content, title_input or url, self.db)
+        source_title = await asyncio.to_thread(_generate_title, title_input if title_input else content, title_input or url, self.db, session_id)
         yield RunResponse(
             event="workflow_completed",
             content={
