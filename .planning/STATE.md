@@ -2,26 +2,26 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-01 after v2.0)
+See: .planning/PROJECT.md (updated 2026-03-06 after v3.0 milestone start)
 
 **Core value:** A user gives a topic (URL or description), picks how they want to learn, and gets a complete, ready-to-study session in minutes — no account needed, no friction.
-**Current focus:** Planning next milestone — run `/gsd:new-milestone`
+**Current focus:** v3.0 AgentOS Observability — Phase 6: AgentOS Core Integration
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-06 — Milestone v3.0 AgentOS Observability started
+Phase: 6 — AgentOS Core Integration
+Plan: Not started
+Status: Roadmap created, ready for plan-phase
+Last activity: 2026-03-06 — v3.0 roadmap created (Phases 6–7)
 
-Progress: [░░░░░░░░░░] 0% (v3.0 in progress)
+Progress: [░░░░░░░░░░] 0% (v3.0 Phase 6 not started)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17 (v1.0)
+- Total plans completed: 17 (v1.0) + 4 (v2.0) = 21
 - Average duration: ~4 min
-- Total execution time: ~68 min
+- Total execution time: ~84 min
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [░░░░░░░░░░] 0% (v3.0 in progress)
 | 02-topic-description-path | 4 | ~20min | ~5min |
 | 03-study-experience-polish | 5 | ~10min | ~2min |
 | 04-chat-backend | 1 | ~2min | ~2min |
+| 05-chat-frontend | 3 | ~6min | ~2min |
 
 **Recent Trend:**
 - Last 5 plans: 03-01 (2min), 03-02 (2min), 03-03 (2min), 03-04 (2min), 03-05 (2min)
-- Trend: Stable
+- Trend: Stable at ~2min per plan
 
 *Updated after each plan completion*
 
@@ -43,6 +44,16 @@ Progress: [░░░░░░░░░░] 0% (v3.0 in progress)
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table (fully updated after v2.0 archive).
+
+### v3.0 Key Context
+
+- AgentOS wraps FastAPI via `base_app=app` parameter — SSE endpoints must remain unbroken
+- All five agents need `db=` added: notes, chat, research, flashcard, quiz
+- SQLite chosen for trace storage (dev-friendly, no infra needed); file path via env var
+- Agno currently at 2.5.2 — may need upgrade to support AgentOS features (INT-03)
+- tenacity retry events should surface in traces, not disappear silently (TRAC-03)
+- Control Plane connection (app.agno.com) is a Phase 7 concern, separate from local tracing
+- AGNO_API_KEY env var needed for Control Plane auth (Phase 7)
 
 ### Pending Todos
 
@@ -65,6 +76,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Completed quick-7 — flashcard and quiz persistence hardened
+Last session: 2026-03-06
+Stopped at: v3.0 roadmap created — Phases 6 and 7 defined
 Resume file: None
+Next step: `/gsd:plan-phase 6`
