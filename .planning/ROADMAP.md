@@ -46,7 +46,12 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
   3. Each trace row includes LLM token usage (input tokens, output tokens) and the model name used
   4. A tenacity retry event (e.g. triggered by a 429) produces a visible error/retry entry in the trace rather than disappearing silently
   5. Running two overlapping sessions produces trace rows scoped to their own session identifiers — no cross-session bleed when querying the db
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Config foundation: bump agno to >=2.5.7, add trace_db_path to Settings
+- [ ] 06-02-PLAN.md — AgentOS wrap + agent db= wiring: wrap FastAPI with AgentOS, add db= to all five agent builders and session workflow
+- [ ] 06-03-PLAN.md — Session isolation + retry visibility: thread session_id through all agent calls, add before_sleep_log to tenacity
 
 ### Phase 7: Control Plane Connection
 **Goal**: The running backend is connected to AgentOS Control Plane at app.agno.com so agent runs, token costs, and session data are remotely visible without any local database queries
@@ -67,5 +72,5 @@ Full details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 | 3. Study Experience Polish | v1.0 | 5/5 | Complete | 2026-02-28 |
 | 4. Chat Backend | v2.0 | 2/2 | Complete | 2026-03-01 |
 | 5. Chat Frontend | v2.0 | 2/2 | Complete | 2026-03-01 |
-| 6. AgentOS Core Integration | v3.0 | 0/? | Not started | - |
+| 6. AgentOS Core Integration | v3.0 | 0/3 | Not started | - |
 | 7. Control Plane Connection | v3.0 | 0/? | Not started | - |
