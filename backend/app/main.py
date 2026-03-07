@@ -76,9 +76,9 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
     db= injection at call time in routers (plan 06-03), NOT via the agents=[]
     registration list. Per agno docs (Pitfall 5), agents called directly via
     agent.run() are traced as long as db= is set on the Agent instance and
-    tracing=True is set on the AgentOS instance. One representative agent is
-    registered in agents=[] solely to satisfy AgentOS startup requirements —
-    it does NOT replace per-request agent instances created inside routers.
+    tracing=True is set on the AgentOS instance. All five agents are registered
+    in agents=[] to provide full visibility in the AgentOS playground UI —
+    they do NOT replace per-request agent instances created inside routers.
     """
     traces_db = SqliteDb(
         db_file=settings.trace_db_path,
@@ -87,6 +87,10 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
     agent_os = AgentOS(
         agents=[
             build_notes_agent("micro_learning", db=traces_db),
+            build_chat_agent("micro_learning", notes="", db=traces_db),
+            build_flashcard_agent("micro_learning", db=traces_db),
+            build_quiz_agent("micro_learning", db=traces_db),
+            build_research_agent(db=traces_db),
         ],
         base_app=fastapi_app,
         db=traces_db,
