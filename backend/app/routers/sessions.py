@@ -10,7 +10,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.models.session import SessionRequest
 from app.extraction.chain import extract_content, ExtractionError
-from app.workflows.session_workflow import build_workflow, _parse_json_safe
+from app.workflows.session_workflow import run_session_workflow, _parse_json_safe
 from app.agents.flashcard_agent import build_flashcard_agent
 from app.agents.quiz_agent import build_quiz_agent
 from app.agents.research_agent import run_research
@@ -176,10 +176,9 @@ async def stream_session(session_id: str):
             return
 
         # Step 2: Run the AI workflow, streaming progress events
-        workflow = build_workflow(tutoring_type, db=_get_traces_db())
-
         try:
-            async for response in workflow.run(
+            async for response in run_session_workflow(
+                session_id=session_id,
                 content=content,
                 tutoring_type=tutoring_type,
                 focus_prompt=focus_prompt,
@@ -187,7 +186,7 @@ async def stream_session(session_id: str):
                 session_type=session_type,
                 sources=sources,
                 title_input=title_input,
-                session_id=session_id,  # TRAC-04: isolate traces per session
+                traces_db=_get_traces_db(),
             ):
                 # Check if this is the final completed response
                 event_name = getattr(response.event, "value", str(response.event)) if response.event else ""
