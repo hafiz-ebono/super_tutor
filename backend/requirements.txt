@@ -14,3 +14,4 @@ tenacity>=8.2.0
 # Observability
 opentelemetry-api>=1.27.0
 opentelemetry-sdk>=1.27.0
+openinference-instrumentation-agno>=0.1.0

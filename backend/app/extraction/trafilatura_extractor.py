@@ -13,3 +13,6 @@ def fetch_via_trafilatura(url: str) -> str | None:
         output_format="markdown",
     )
     return text if text and len(text) > 200 else None
+
+if __name__ == "__main__":
+    print(fetch_via_trafilatura("https://en.wikipedia.org/wiki/Cryptocurrency"))
