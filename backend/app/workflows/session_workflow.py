@@ -45,6 +45,35 @@ def _extract_title(content: str, url: str = "") -> str:
     return url[:80] if url else "Untitled"
 
 
+_TITLE_ERROR_PREFIXES = (
+    "error",
+    "provider",
+    "i cannot",
+    "i'm sorry",
+    "i apologize",
+    "sorry",
+)
+_TITLE_ERROR_SUBSTRINGS = ("returned error", "error occurred")
+
+
+def _is_valid_title(title: str) -> bool:
+    """Return True if title looks like a genuine short title, not a provider error string."""
+    lower = title.lower()
+    # Must not start with known error prefixes
+    if any(lower.startswith(p) for p in _TITLE_ERROR_PREFIXES):
+        return False
+    # Must not contain known error substrings
+    if any(s in lower for s in _TITLE_ERROR_SUBSTRINGS):
+        return False
+    # Must not span multiple lines (real titles are single-line)
+    if "\n" in title:
+        return False
+    # Must be at least 2 words (single-word responses are suspicious)
+    if len(title.split()) < 2:
+        return False
+    return True
+
+
 def _generate_title(text: str, fallback: str = "", db: SqliteDb | None = None, session_id: str = "") -> str:
     """Ask the AI for a concise 3-5 word title. Falls back to fallback (truncated) or _extract_title on failure."""
     agent = Agent(
@@ -59,9 +88,11 @@ def _generate_title(text: str, fallback: str = "", db: SqliteDb | None = None, s
         logger.debug("Title generation start")
         result = run_with_retry(agent.run, text[:800], session_id=session_id)
         title = (result.content or "").strip().strip('"').strip("'")
-        if title:
+        if title and _is_valid_title(title):
             logger.debug("Title generation done — title=%r", title)
             return title[:80]
+        elif title:
+            logger.warning("Title generation returned error-like string, falling back — title=%r", title)
     except Exception:
         logger.warning("Title generation failed, falling back to user input or extract_title")
     if fallback:
