@@ -63,6 +63,14 @@ async def chat_stream(request: ChatStreamRequest):
                         "event": "token",
                         "data": json.dumps({"token": chunk.content}),
                     }
+            if request.session_id:
+                try:
+                    await agent.aset_session_name(
+                        session_id=request.session_id,
+                        session_name=request.message,
+                    )
+                except Exception as e:
+                    logger.warning("Could not set session name: %s", e)
             yield {"event": "done", "data": json.dumps({})}
         except Exception as e:
             logger.error("Chat stream error: %s", e, exc_info=True)
