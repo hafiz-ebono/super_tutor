@@ -96,6 +96,6 @@ Plans:
 | 5. Chat Frontend | v2.0 | 2/2 | Complete | 2026-03-01 |
 | 6. AgentOS Core Integration | v3.0 | 3/3 | Complete | 2026-03-06 |
 | 7. Control Plane Connection | v3.0 | 2/2 | Complete | 2026-03-07 |
-| 8. Storage and Workflow Foundation | 2/2 | Complete   | 2026-03-07 | - |
+| 8. Storage and Workflow Foundation | 2/2 | Complete    | 2026-03-07 | - |
 | 9. Team Integration and Eager Generation | v4.0 | 0/TBD | Not started | - |
 | 10. API Simplification | v4.0 | 0/TBD | Not started | - |
