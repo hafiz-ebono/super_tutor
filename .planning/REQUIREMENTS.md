@@ -11,13 +11,13 @@ Requirements for the Agentic Backend Refactor milestone. Agno-native Workflow an
 
 - [x] **STOR-01**: Backend stores session data (notes, tutoring_type, session_type, sources) in SQLite keyed by session_id after session creation completes
 - [x] **STOR-02**: Session storage uses a separate SQLite file from AgentOS traces, configurable via env var (`SESSION_DB_PATH`)
-- [ ] **STOR-03**: Request to regenerate or chat with an expired/unknown session_id returns a clear error to the client
+- [x] **STOR-03**: Request to regenerate or chat with an expired/unknown session_id returns a clear error to the client
 
 ### Workflow Refactor
 
 - [x] **WKFL-01**: `SessionWorkflow` is an `agno.workflow.Workflow` subclass (not a plain Python class workaround)
 - [x] **WKFL-02**: Workflow `run()` writes extracted content, notes, tutoring_type, and sources to `session_state` after notes generation
-- [ ] **WKFL-03**: Session data written in `run()` is readable by subsequent requests using the same session_id (SQLite round-trip verified)
+- [x] **WKFL-03**: Session data written in `run()` is readable by subsequent requests using the same session_id (SQLite round-trip verified)
 
 ### Team Integration
 
@@ -62,10 +62,10 @@ Deferred to future milestone.
 |-------------|-------|--------|
 | STOR-01 | Phase 8 | Complete |
 | STOR-02 | Phase 8 | Complete |
-| STOR-03 | Phase 8 | Pending |
+| STOR-03 | Phase 8 | Complete |
 | WKFL-01 | Phase 8 | Complete |
 | WKFL-02 | Phase 8 | Complete |
-| WKFL-03 | Phase 8 | Pending |
+| WKFL-03 | Phase 8 | Complete |
 | TEAM-01 | Phase 9 | Pending |
 | TEAM-02 | Phase 9 | Pending |
 | TEAM-03 | Phase 9 | Pending |

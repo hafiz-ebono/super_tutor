@@ -44,7 +44,7 @@ Full details: [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROADMAP.md)
 
 **Milestone Goal:** Replace plain-Python workflow workarounds with Agno-native Workflow and Team primitives, backed by SQLite session storage so all agents share the same extracted context without the client re-sending it.
 
-- [ ] **Phase 8: Storage and Workflow Foundation** — SQLite session storage established and Agno Workflow subclass verified via SQLite round-trip
+- [x] **Phase 8: Storage and Workflow Foundation** — SQLite session storage established and Agno Workflow subclass verified via SQLite round-trip (completed 2026-03-07)
 - [ ] **Phase 9: Team Integration and Eager Generation** — TutorTeam coordinates generation agents; user can opt into eager generation at session creation
 - [ ] **Phase 10: API Simplification** — Regenerate and chat endpoints load notes from storage; frontend stops sending notes in request bodies
 
@@ -96,6 +96,6 @@ Plans:
 | 5. Chat Frontend | v2.0 | 2/2 | Complete | 2026-03-01 |
 | 6. AgentOS Core Integration | v3.0 | 3/3 | Complete | 2026-03-06 |
 | 7. Control Plane Connection | v3.0 | 2/2 | Complete | 2026-03-07 |
-| 8. Storage and Workflow Foundation | 1/2 | In Progress|  | - |
+| 8. Storage and Workflow Foundation | 2/2 | Complete   | 2026-03-07 | - |
 | 9. Team Integration and Eager Generation | v4.0 | 0/TBD | Not started | - |
 | 10. API Simplification | v4.0 | 0/TBD | Not started | - |

@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-07 after v4.0 milestone start)
 
 **Core value:** A user gives a topic (URL or description), picks how they want to learn, and gets a complete, ready-to-study session in minutes — no account needed, no friction.
-**Current focus:** v4.0 Agentic Backend Refactor — Phase 8 in progress (Plan 1 complete)
+**Current focus:** v4.0 Agentic Backend Refactor — Phase 8 in progress (Plan 2 complete)
 
 ## Current Position
 
 Phase: 8 of 10 (Storage and Workflow Foundation)
-Plan: 1 of TBD
+Plan: 2 of TBD
 Status: In progress
-Last activity: 2026-03-07 — Completed 08-01 (agno Workflow composition + session_db_path)
+Last activity: 2026-03-07 — Completed 08-02 (router wiring + SQLite round-trip test)
 
 Progress: [███████░░░░░░░░░░░░░] 35% (7/10 phases complete across all milestones)
 
@@ -34,10 +34,10 @@ Progress: [███████░░░░░░░░░░░░░] 35% (7/
 | 05-chat-frontend | 3 | ~6min | ~2min |
 | 06-agentos-core-integration | 3 | ~11min | ~4min |
 | 07-control-plane-connection | 2 | ~13min | ~6min |
-| 08-storage-and-workflow-foundation | 1 | ~2min | ~2min |
+| 08-storage-and-workflow-foundation | 2 | ~5min | ~2.5min |
 
 **Recent Trend:**
-- Last 5 plans: 03-05 (2min), 06-01 (4min), 07-01 (6min), 07-02 (7min), 08-01 (2min)
+- Last 5 plans: 06-01 (4min), 07-01 (6min), 07-02 (7min), 08-01 (2min), 08-02 (3min)
 - Trend: Stable at ~2-4min per plan
 
 *Updated after each plan completion*
@@ -56,6 +56,8 @@ Recent decisions affecting current work:
 - [v4.0 planning]: `on_route_conflict="preserve_base_app"` must survive refactor — do not touch main.py AgentOS setup
 - [08-01]: notes_step parameter must be exactly `session_state: dict` — agno detects via inspection for injection
 - [08-01]: sessions.py router updated from build_workflow()+workflow.run() to run_session_workflow() async generator interface
+- [08-02]: _guard_session() uses build_session_workflow + wf.get_session() returning None for unknown session_id
+- [08-02]: agno 2.5.8 confirmed: get_session(), get_session_state() APIs available; Workflow.run() persists session_state to SQLite; round-trip test passed
 
 ### Pending Todos
 
@@ -63,13 +65,12 @@ None.
 
 ### Blockers/Concerns
 
-- [Phase 8]: Verify `SqliteStorage` read method name against installed agno 2.5.7 before wiring reads (exact API unconfirmed in research)
-- [Phase 8]: Verify whether `arun()` storage bug is fixed in 2.5.7 (reported at 1.7.1; empirical test needed)
+- [Phase 9]: Test `stream_intermediate_steps` behavior on minimal 2-agent Team before building full TutorTeam (GitHub #4838: Team may drop SSE progress events)
 - [Phase 9]: Test `stream_intermediate_steps` behavior on minimal 2-agent Team before building full TutorTeam (GitHub #4838: Team may drop SSE progress events)
 
 ## Session Continuity
 
 Last session: 2026-03-07
-Stopped at: Completed 08-01-PLAN.md (agno Workflow composition + session_db_path)
+Stopped at: Completed 08-02-PLAN.md (router wiring + SQLite round-trip test)
 Resume file: None
-Next step: /gsd:execute-phase 08 (plan 02)
+Next step: /gsd:execute-phase 08 (plan 03, if exists) or /gsd:execute-phase 09
