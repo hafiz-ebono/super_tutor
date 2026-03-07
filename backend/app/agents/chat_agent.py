@@ -17,6 +17,7 @@ def build_chat_agent(tutoring_type: str, notes: str, db: SqliteDb | None = None)
         name="ChatAgent",
         model=get_model(),
         db=db,
+        enable_session_summaries=True,
         instructions=f"""{persona}
 
 You are a tutoring assistant helping a student understand the session material below.

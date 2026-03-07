@@ -27,6 +27,7 @@ def build_research_agent(db: SqliteDb | None = None) -> Agent:
         name="ResearchAgent",
         model=get_model(),
         db=db,
+        enable_session_summaries=True,
         tools=[TavilyTools()],
         instructions="""You are a research assistant. When given a topic, perform web research and synthesize findings.
 
