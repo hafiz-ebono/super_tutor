@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-07 after v4.0 milestone start)
 Phase: 8 of 10 (Storage and Workflow Foundation)
 Plan: 2 of TBD
 Status: In progress
-Last activity: 2026-03-07 — Completed 08-02 (router wiring + SQLite round-trip test)
+Last activity: 2026-03-07 - Completed quick task 16: add prompt injection and output guardrails to the agents
 
 Progress: [███████░░░░░░░░░░░░░] 35% (7/10 phases complete across all milestones)
 
@@ -67,6 +67,12 @@ None.
 
 - [Phase 9]: Test `stream_intermediate_steps` behavior on minimal 2-agent Team before building full TutorTeam (GitHub #4838: Team may drop SSE progress events)
 - [Phase 9]: Test `stream_intermediate_steps` behavior on minimal 2-agent Team before building full TutorTeam (GitHub #4838: Team may drop SSE progress events)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 16 | add prompt injection and output guardrails to the agents | 2026-03-07 | dcad322 | [16-add-prompt-injection-and-output-guardrai](./quick/16-add-prompt-injection-and-output-guardrai/) |
 
 ## Session Continuity
 
