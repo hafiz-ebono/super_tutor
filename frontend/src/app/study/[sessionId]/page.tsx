@@ -222,7 +222,7 @@ export default function StudyPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage,
-          notes: session.notes,
+          session_id: sessionId,
           tutoring_type: session.tutoring_type,
           // Send last 6 prior turns (client-side cap; backend is stateless)
           history: history.slice(0, -1).slice(-6),
@@ -680,7 +680,15 @@ export default function StudyPage() {
 
             {/* Message list */}
             <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-              {chatHistory.length === 0 && (
+              {/* Persona-adapted intro — always shown as first assistant bubble */}
+              {session.chat_intro && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed bg-zinc-100 text-zinc-900">
+                    {session.chat_intro}
+                  </div>
+                </div>
+              )}
+              {chatHistory.length === 0 && !session.chat_intro && (
                 <p className="text-xs text-zinc-400 text-center mt-8">
                   Ask anything about the session content.
                 </p>
