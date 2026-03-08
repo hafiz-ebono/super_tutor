@@ -68,12 +68,7 @@ def test_session_result_with_chat_intro():
 # ---------------------------------------------------------------------------
 
 def test_chat_stream_request_no_notes():
-    """ChatStreamRequest must not expose a 'notes' field."""
-    ChatStreamRequest(
-        message="What is photosynthesis?",
-        tutoring_type="micro_learning",
-        session_id="sess-abc",
-    )
+    """ChatStreamRequest must not declare a 'notes' field."""
     assert "notes" not in ChatStreamRequest.model_fields
 
 
