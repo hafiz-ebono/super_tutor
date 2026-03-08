@@ -2,7 +2,7 @@
 Unit tests for workflow step executors in session_workflow.py.
 
 Tests use unittest.mock to isolate steps from real agent calls and network I/O.
-Each test verifies behaviour described in the Task 3 (research_step) and Task 4 (notes_step) implementation plans.
+Each test verifies behaviour described in the Task 3 (research_step), Task 4 (notes_step), and Task 5 (flashcards_step) implementation plans.
 
 Agno step executor signature: fn(step_input: StepInput, session_state: dict) -> StepOutput
 agno injects session_state by detecting the parameter name — it is a plain mutable dict.
