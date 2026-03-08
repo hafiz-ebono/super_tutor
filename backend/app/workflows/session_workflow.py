@@ -157,7 +157,7 @@ def research_step(step_input: StepInput, session_state: dict) -> StepOutput:
     settings = get_settings()
     data = step_input.additional_data or {}
 
-    topic_description = data.get("topic_description", "") or (step_input.message or "")
+    topic_description = data.get("topic_description", "") or (step_input.get_input_as_string() or "")
     session_id = data.get("session_id", "")
     traces_db = data.get("db") or data.get("traces_db")
 
@@ -241,7 +241,7 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
         source_content = session_state.get("source_content", "")
     else:
         # url or paste path — read from additional_data and persist for downstream steps
-        source_content = data.get("source_content", "") or (step_input.message or "")
+        source_content = data.get("source_content", "") or (step_input.get_input_as_string() or "")
         session_state["source_content"] = source_content
         session_state["session_type"] = session_type  # persist url/paste so GET endpoint returns correct type
 
