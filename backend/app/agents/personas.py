@@ -15,3 +15,9 @@ PERSONAS: dict[str, str] = {
         "and connections to broader concepts and edge cases."
     ),
 }
+
+CHAT_INTROS: dict[str, str] = {
+    "micro_learning": "Session assistant here. Ask me anything — I'll keep it short.",
+    "teaching_a_kid": "Hi! I'm your study buddy for this session! What would you like to understand?",
+    "advanced": "I'm your session tutor. I have full context of this material — ask me anything, including edge cases and nuance.",
+}
