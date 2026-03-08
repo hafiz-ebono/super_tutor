@@ -17,7 +17,9 @@ PERSONAS: dict[str, str] = {
 }
 
 CHAT_INTROS: dict[str, str] = {
-    "micro_learning": "Session assistant here. Ask me anything — I'll keep it short.",
+    "micro_learning": "Session assistant here. Ask me anything - I'll keep it short.",
     "teaching_a_kid": "Hi! I'm your study buddy for this session! What would you like to understand?",
-    "advanced": "I'm your session tutor. I have full context of this material — ask me anything, including edge cases and nuance.",
+    "advanced": "I'm your session tutor. I have full context of this material - ask me anything, including edge cases and nuance.",
 }
+
+assert set(CHAT_INTROS) == set(PERSONAS), "CHAT_INTROS keys must match PERSONAS keys"
