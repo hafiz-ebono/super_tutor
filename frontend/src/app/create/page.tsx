@@ -41,6 +41,8 @@ function CreateForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorKind, setErrorKind] = useState<string | null>(errorParam);
   const [pasteText, setPasteText] = useState("");
+  const [generateFlashcards, setGenerateFlashcards] = useState(false);
+  const [generateQuiz, setGenerateQuiz] = useState(false);
 
   const errorMessages = errorKind ? ERROR_MESSAGES[errorKind] ?? ERROR_MESSAGES.empty : null;
 
@@ -53,6 +55,8 @@ function CreateForm() {
     const payload: SessionRequest = {
       tutoring_type: selectedMode,
       focus_prompt: focusPrompt || undefined,
+      generate_flashcards: generateFlashcards || undefined,
+      generate_quiz: generateQuiz || undefined,
       ...(inputMode === "topic"
         ? { topic_description: topicDescription }
         : pasteText
@@ -69,7 +73,7 @@ function CreateForm() {
       if (!res.ok) throw new Error("Server error");
       const { session_id } = await res.json();
       router.push(
-        `/loading?session_id=${session_id}&tutoring_type=${selectedMode}&focus_prompt=${encodeURIComponent(focusPrompt)}&input_mode=${inputMode}`
+        `/loading?session_id=${session_id}&tutoring_type=${selectedMode}&focus_prompt=${encodeURIComponent(focusPrompt)}&input_mode=${inputMode}&generate_flashcards=${generateFlashcards}&generate_quiz=${generateQuiz}`
       );
     } catch {
       setUrl("");
@@ -233,6 +237,33 @@ function CreateForm() {
             placeholder="e.g. 'key algorithms', 'historical causes', 'main arguments'"
           />
         </div>
+
+        {/* Opt-in generation checkboxes */}
+        <fieldset className="border-none p-0 m-0">
+          <legend className="text-sm font-medium text-zinc-500 mb-3">
+            Generate upfront <span className="text-zinc-400 font-normal">(optional — you can also generate later)</span>
+          </legend>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={generateFlashcards}
+                onChange={(e) => setGenerateFlashcards(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-zinc-700">Flashcards <span className="text-zinc-400">(8-12 cards)</span></span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={generateQuiz}
+                onChange={(e) => setGenerateQuiz(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-zinc-700">Quiz <span className="text-zinc-400">(8-10 questions)</span></span>
+            </label>
+          </div>
+        </fieldset>
 
         <button
           type="submit"
