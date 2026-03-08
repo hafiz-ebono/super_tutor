@@ -239,6 +239,8 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
         source_content = step_input.additional_data.get("source_content", "")
         session_state["source_content"] = source_content
 
+    # 50-char minimum (lower than research_step's 100) — user-supplied content can be
+    # shorter prose; we only reject clearly empty or trivially short inputs.
     if not source_content or len(source_content) < 50:
         raise RuntimeError(
             f"source_content is too short to generate notes — got {len(source_content)} chars. "
@@ -327,7 +329,7 @@ async def run_session_workflow(
     result = await asyncio.to_thread(
         workflow.run,
         additional_data={
-            "content": content,
+            "source_content": content,
             "tutoring_type": tutoring_type,
             "focus_prompt": focus_prompt,
             "session_type": session_type,
