@@ -65,9 +65,8 @@ async def chat_stream(request: ChatStreamRequest):
     )
 
     logger.info(
-        "Chat stream — tutoring_type=%s history_turns=%d",
-        request.tutoring_type,
-        len(request.history),
+        "Chat stream start",
+        extra={"session_id": request.session_id, "tutoring_type": request.tutoring_type, "history_turns": len(request.history)},
     )
 
     async def event_generator() -> AsyncGenerator[dict, None]:
@@ -88,9 +87,10 @@ async def chat_stream(request: ChatStreamRequest):
                     )
                 except Exception as e:
                     logger.warning("Could not set session name: %s", e)
+            logger.info("Chat stream done", extra={"session_id": request.session_id})
             yield {"event": "done", "data": json.dumps({})}
         except Exception as e:
-            logger.error("Chat stream error: %s", e, exc_info=True)
+            logger.error("Chat stream error: %s", e, exc_info=True, extra={"session_id": request.session_id})
             from app.utils.retry import is_retryable
             if is_retryable(e):
                 user_message = "The AI is temporarily busy — please try again in a moment."

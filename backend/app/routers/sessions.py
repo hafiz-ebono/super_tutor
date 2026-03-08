@@ -253,10 +253,13 @@ async def get_session(session_id: str):
     wf = build_session_workflow(session_id=session_id, session_db=_get_session_db())
     existing = wf.get_session(session_id=session_id)
     if existing is None:
+        logger.warning("get_session — not found", extra={"session_id": session_id})
         raise HTTPException(status_code=404, detail="Session not found")
     state = existing.session_data or {}
     if not state.get("notes"):
+        logger.info("get_session — pending", extra={"session_id": session_id})
         return JSONResponse(status_code=202, content={"status": "pending"})
+    logger.info("get_session — found", extra={"session_id": session_id})
     return {
         "session_id": session_id,
         "source_title": state.get("title", "Study Session"),
