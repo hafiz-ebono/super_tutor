@@ -227,7 +227,6 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
     settings = get_settings()
 
     tutoring_type = step_input.additional_data.get("tutoring_type", "advanced")
-    sources = step_input.additional_data.get("sources", [])
     focus_prompt = step_input.additional_data.get("focus_prompt", "")
     session_id = step_input.additional_data.get("session_id", "")
 
@@ -283,7 +282,9 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
     # Write to session_state — agno persists to SQLite in finally block
     session_state["notes"] = notes
     session_state["tutoring_type"] = tutoring_type
-    session_state["sources"] = sources
+    # sources: only set for non-topic sessions — topic sessions have sources set by research_step
+    if session_type != "topic":
+        session_state["sources"] = []
     session_state["chat_intro"] = CHAT_INTROS.get(tutoring_type, CHAT_INTROS["advanced"])
 
     return StepOutput(content=notes)
