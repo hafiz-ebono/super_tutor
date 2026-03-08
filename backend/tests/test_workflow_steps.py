@@ -255,3 +255,271 @@ class TestResearchStepCallsBuilderCorrectly:
         assert call_args.args[0] == mock_agent.run
         # Second positional arg must be the topic string
         assert call_args.args[1] == topic
+
+
+# ---------------------------------------------------------------------------
+# notes_step — source_content routing
+# ---------------------------------------------------------------------------
+
+GOOD_NOTES = "N" * 200   # well over the 100-char minimum for notes validation
+
+
+class TestNotesStepSourceContentRouting:
+    """notes_step must read source_content from the correct location based on session_type."""
+
+    def test_reads_source_content_from_session_state_for_topic(self):
+        """For topic sessions, notes_step should read source_content from session_state."""
+        source_content = "S" * 300
+        session_state: dict = {
+            "session_type": "topic",
+            "source_content": source_content,
+        }
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "session_id": "test-topic-001",
+        })
+        fake_notes_result = _make_fake_result(GOOD_NOTES)
+        mock_agent = MagicMock()
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=mock_agent,
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=fake_notes_result,
+        ) as mock_retry:
+            from app.workflows.session_workflow import notes_step
+            notes_step(step_input, session_state)
+
+        # run_with_retry must be called with a string containing the session_state source_content
+        call_args = mock_retry.call_args
+        input_text = call_args.args[1]
+        assert source_content in input_text, (
+            "notes_step must pass the session_state source_content to the agent"
+        )
+
+    def test_reads_source_content_from_additional_data_for_url(self):
+        """For url sessions, notes_step should read source_content from additional_data."""
+        source_content = "U" * 300
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "micro_learning",
+            "session_id": "test-url-001",
+            "source_content": source_content,
+        })
+        fake_notes_result = _make_fake_result(GOOD_NOTES)
+        mock_agent = MagicMock()
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=mock_agent,
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=fake_notes_result,
+        ) as mock_retry:
+            from app.workflows.session_workflow import notes_step
+            notes_step(step_input, session_state)
+
+        # run_with_retry must be called with a string containing the additional_data source_content
+        call_args = mock_retry.call_args
+        input_text = call_args.args[1]
+        assert source_content in input_text, (
+            "notes_step must pass the additional_data source_content to the agent"
+        )
+
+        # source_content must be persisted to session_state for downstream steps
+        assert session_state.get("source_content") == source_content, (
+            "notes_step must persist source_content to session_state for url/paste sessions"
+        )
+
+    def test_reads_source_content_from_additional_data_for_paste(self):
+        """For paste sessions, notes_step should read source_content from additional_data."""
+        source_content = "P" * 300
+        session_state: dict = {"session_type": "paste"}
+        step_input = _make_step_input({
+            "tutoring_type": "teaching_a_kid",
+            "session_id": "test-paste-001",
+            "source_content": source_content,
+        })
+        fake_notes_result = _make_fake_result(GOOD_NOTES)
+        mock_agent = MagicMock()
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=mock_agent,
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=fake_notes_result,
+        ) as mock_retry:
+            from app.workflows.session_workflow import notes_step
+            notes_step(step_input, session_state)
+
+        call_args = mock_retry.call_args
+        input_text = call_args.args[1]
+        assert source_content in input_text
+        assert session_state.get("source_content") == source_content
+
+    def test_raises_runtime_error_when_source_content_empty(self):
+        """notes_step must raise RuntimeError if source_content is empty."""
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "source_content": "",
+        })
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=MagicMock(),
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=_make_fake_result(GOOD_NOTES),
+        ):
+            from app.workflows.session_workflow import notes_step
+            with pytest.raises(RuntimeError):
+                notes_step(step_input, session_state)
+
+    def test_raises_runtime_error_when_source_content_too_short(self):
+        """notes_step must raise RuntimeError if source_content is under 50 chars."""
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "source_content": "too short",  # under 50 chars
+        })
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=MagicMock(),
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=_make_fake_result(GOOD_NOTES),
+        ):
+            from app.workflows.session_workflow import notes_step
+            with pytest.raises(RuntimeError):
+                notes_step(step_input, session_state)
+
+
+# ---------------------------------------------------------------------------
+# notes_step — session_state writes
+# ---------------------------------------------------------------------------
+
+class TestNotesStepSessionStateWrites:
+    """notes_step must write notes and chat_intro to session_state."""
+
+    def test_sets_notes_in_session_state(self):
+        """notes_step should write the agent output to session_state['notes']."""
+        source_content = "T" * 300
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "source_content": source_content,
+        })
+        expected_notes = "These are the generated notes. " * 10
+        fake_notes_result = _make_fake_result(expected_notes)
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=MagicMock(),
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=fake_notes_result,
+        ):
+            from app.workflows.session_workflow import notes_step
+            notes_step(step_input, session_state)
+
+        assert session_state.get("notes") == expected_notes, (
+            "notes_step must write agent output to session_state['notes']"
+        )
+
+    def test_sets_chat_intro_for_advanced(self):
+        """notes_step should set session_state['chat_intro'] using CHAT_INTROS['advanced']."""
+        from app.agents.personas import CHAT_INTROS
+
+        source_content = "A" * 300
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "source_content": source_content,
+        })
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=MagicMock(),
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=_make_fake_result(GOOD_NOTES),
+        ):
+            from app.workflows.session_workflow import notes_step
+            notes_step(step_input, session_state)
+
+        assert session_state.get("chat_intro") == CHAT_INTROS["advanced"], (
+            "notes_step must set chat_intro to CHAT_INTROS['advanced'] for advanced tutoring_type"
+        )
+
+    def test_sets_chat_intro_for_micro_learning(self):
+        """notes_step should set session_state['chat_intro'] using CHAT_INTROS['micro_learning']."""
+        from app.agents.personas import CHAT_INTROS
+
+        source_content = "M" * 300
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "micro_learning",
+            "source_content": source_content,
+        })
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=MagicMock(),
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=_make_fake_result(GOOD_NOTES),
+        ):
+            from app.workflows.session_workflow import notes_step
+            notes_step(step_input, session_state)
+
+        assert session_state.get("chat_intro") == CHAT_INTROS["micro_learning"]
+
+    def test_sets_chat_intro_for_teaching_a_kid(self):
+        """notes_step should set session_state['chat_intro'] using CHAT_INTROS['teaching_a_kid']."""
+        from app.agents.personas import CHAT_INTROS
+
+        source_content = "K" * 300
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "teaching_a_kid",
+            "source_content": source_content,
+        })
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=MagicMock(),
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=_make_fake_result(GOOD_NOTES),
+        ):
+            from app.workflows.session_workflow import notes_step
+            notes_step(step_input, session_state)
+
+        assert session_state.get("chat_intro") == CHAT_INTROS["teaching_a_kid"]
+
+    def test_unknown_tutoring_type_falls_back_to_advanced_chat_intro(self):
+        """notes_step should fall back to CHAT_INTROS['advanced'] for unknown tutoring_type."""
+        from app.agents.personas import CHAT_INTROS
+
+        source_content = "X" * 300
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "unknown_type",
+            "source_content": source_content,
+        })
+
+        with patch(
+            "app.workflows.session_workflow.build_notes_agent",
+            return_value=MagicMock(),
+        ), patch(
+            "app.workflows.session_workflow.run_with_retry",
+            return_value=_make_fake_result(GOOD_NOTES),
+        ):
+            from app.workflows.session_workflow import notes_step
+            notes_step(step_input, session_state)
+
+        assert session_state.get("chat_intro") == CHAT_INTROS["advanced"]

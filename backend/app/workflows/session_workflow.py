@@ -24,6 +24,7 @@ from agno.agent import Agent
 
 from app.agents.model_factory import get_model
 from app.agents.notes_agent import build_notes_agent
+from app.agents.personas import CHAT_INTROS
 from app.agents.research_agent import build_research_agent
 from app.config import get_settings
 from app.utils.retry import run_with_retry
@@ -222,19 +223,32 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
     """
     settings = get_settings()
 
-    content = step_input.additional_data.get("content", "")
-    tutoring_type = step_input.additional_data.get("tutoring_type", "micro_learning")
-    session_type = step_input.additional_data.get("session_type", "url")
+    tutoring_type = step_input.additional_data.get("tutoring_type", "advanced")
     sources = step_input.additional_data.get("sources", [])
     focus_prompt = step_input.additional_data.get("focus_prompt", "")
     session_id = step_input.additional_data.get("session_id", "")
 
     traces_db = step_input.additional_data.get("traces_db")
 
+    # Determine source_content based on session_type
+    session_type = session_state.get("session_type", "")
+    if session_type == "topic":
+        source_content = session_state.get("source_content", "")
+    else:
+        # url or paste path — read from additional_data and persist for downstream steps
+        source_content = step_input.additional_data.get("source_content", "")
+        session_state["source_content"] = source_content
+
+    if not source_content or len(source_content) < 50:
+        raise RuntimeError(
+            f"source_content is too short to generate notes — got {len(source_content)} chars. "
+            "Please provide more content."
+        )
+
     input_text = (
-        f"Content:\n{content}\n\nFocus on: {focus_prompt}"
+        f"Content:\n{source_content}\n\nFocus on: {focus_prompt}"
         if focus_prompt
-        else f"Content:\n{content}"
+        else f"Content:\n{source_content}"
     )
 
     notes_agent = build_notes_agent(tutoring_type, db=traces_db)
@@ -263,8 +277,8 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
     # Write to session_state — agno persists to SQLite in finally block
     session_state["notes"] = notes
     session_state["tutoring_type"] = tutoring_type
-    session_state["session_type"] = session_type
     session_state["sources"] = sources
+    session_state["chat_intro"] = CHAT_INTROS.get(tutoring_type, CHAT_INTROS["advanced"])
 
     return StepOutput(content=notes)
 
