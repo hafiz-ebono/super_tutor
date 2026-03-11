@@ -8,7 +8,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.models.chat import ChatStreamRequest
 from app.agents.chat_agent import build_chat_agent, build_chat_messages
 from app.config import get_settings
-from app.workflows.session_workflow import build_session_workflow, _get_session_db
+from app.workflows.session_workflow import build_session_workflow
 from agno.db.sqlite import SqliteDb
 
 logger = logging.getLogger("super_tutor.chat")
@@ -45,7 +45,7 @@ async def chat_stream(request: ChatStreamRequest):
     """
     # Load notes from SQLite session state — authoritative source, not client-supplied.
     try:
-        wf = build_session_workflow(session_id=request.session_id, session_db=_get_session_db())
+        wf = build_session_workflow(session_id=request.session_id, session_db=_get_traces_db())
         session = wf.get_session(session_id=request.session_id)
     except Exception as e:
         logger.error("Failed to load session for chat — session_id=%s error=%s", request.session_id, e, exc_info=True)

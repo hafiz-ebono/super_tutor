@@ -39,7 +39,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_control_plane_origins = ["https://os.agno.com", "https://app.agno.com"]
+_control_plane_origins = ["https://os.agno.com", "https://app.agno.com", "http://localhost:8000"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,7 +64,7 @@ from app.agents.chat_agent import build_chat_agent
 from app.agents.flashcard_agent import build_flashcard_agent
 from app.agents.quiz_agent import build_quiz_agent
 from app.agents.research_agent import build_research_agent
-from app.workflows.session_workflow import build_session_workflow, _get_session_db
+from app.workflows.session_workflow import build_session_workflow
 
 
 def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
@@ -109,6 +109,7 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
         db=traces_db,
         tracing=True,
         on_route_conflict="preserve_base_app",
+        id="super_tutor_agentos",
     )
     return agent_os.get_app()
 

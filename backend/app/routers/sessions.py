@@ -12,7 +12,6 @@ from app.extraction.chain import extract_content, ExtractionError
 from app.workflows.session_workflow import (
     run_workflow_background,
     build_session_workflow,
-    _get_session_db,
     _parse_json_safe,
 )
 from app.agents.flashcard_agent import build_flashcard_agent
@@ -239,8 +238,8 @@ async def get_session(session_id: str):
             },
         )
 
-    # status == "complete" — read session data from agno's SQLite
-    wf = build_session_workflow(session_id=session_id, session_db=_get_session_db())
+    # status == "complete" — read session data from agno's SQLite (traces db)
+    wf = build_session_workflow(session_id=session_id, session_db=_get_traces_db())
     existing = wf.get_session(session_id=session_id)
     if existing is None:
         logger.error(

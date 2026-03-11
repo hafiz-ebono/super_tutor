@@ -36,21 +36,21 @@ logger = logging.getLogger("super_tutor.workflow")
 
 
 # ---------------------------------------------------------------------------
-# Session DB singleton
+# Traces DB singleton (single db for agent traces + workflow session state)
 # ---------------------------------------------------------------------------
 
-def _get_session_db() -> SqliteDb:
-    """Lazy singleton for the session SQLite db — separate file from traces."""
-    if not hasattr(_get_session_db, "_instance"):
+def _get_traces_db() -> SqliteDb:
+    """Lazy singleton for the shared traces db used by both AgentOS and workflows."""
+    if not hasattr(_get_traces_db, "_instance"):
         settings = get_settings()
-        db_dir = os.path.dirname(settings.session_db_path)
+        db_dir = os.path.dirname(settings.trace_db_path)
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
-        _get_session_db._instance = SqliteDb(
-            db_file=settings.session_db_path,
-            id="super_tutor_sessions",  # different id from traces (super_tutor_traces)
+        _get_traces_db._instance = SqliteDb(
+            db_file=settings.trace_db_path,
+            id="super_tutor_traces",
         )
-    return _get_session_db._instance
+    return _get_traces_db._instance
 
 
 # ---------------------------------------------------------------------------
@@ -574,7 +574,7 @@ async def run_workflow_background(
 
     workflow = build_session_workflow(
         session_id=session_id,
-        session_db=_get_session_db(),
+        session_db=traces_db or _get_traces_db(),
         session_type=session_type,
         generate_flashcards=generate_flashcards,
         generate_quiz=generate_quiz,

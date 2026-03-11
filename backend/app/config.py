@@ -20,10 +20,9 @@ class Settings(BaseSettings):
     agent_fallback_api_key: str = ""  # fallback API key (if different provider; defaults to agent_api_key)
     agent_max_retries: int = 3         # max attempts before giving up
 
-    # Trace storage — SQLite db for AgentOS run traces
-    trace_db_path: str = "tmp/super_tutor_traces.db"    # override with TRACE_DB_PATH env var
-    session_db_path: str = "tmp/super_tutor_sessions.db"  # override with SESSION_DB_PATH env var
-    status_db_path: str = "tmp/session_status.db"          # override with STATUS_DB_PATH env var
+    # Storage paths — override via env vars
+    trace_db_path: str = "tmp/super_tutor_traces.db"  # AgentOS traces + workflow session state
+    status_db_path: str = "tmp/session_status.db"     # session lifecycle status (pending/complete/failed)
 
     # CORS
     allowed_origins: List[str] | str = ["http://localhost:3000"]
