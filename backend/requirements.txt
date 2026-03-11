@@ -11,6 +11,8 @@ openai>=1.56.0
 groq>=0.9.0
 tavily-python>=0.3.0
 tenacity>=8.2.0
+anthropic>=0.34.0
+debugpy>=1.8.1
 
 # Observability
 opentelemetry-api>=1.27.0
