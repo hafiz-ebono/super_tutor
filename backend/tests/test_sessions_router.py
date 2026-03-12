@@ -160,7 +160,7 @@ def test_get_session_complete(client):
             return_value={"status": "complete", "error_kind": "", "error_message": ""},
         ),
         patch("app.routers.sessions.build_session_workflow", return_value=mock_workflow),
-        patch("app.routers.sessions._get_session_db"),
+        patch("app.routers.sessions._get_traces_db"),
     ):
         response = client.get("/sessions/some-session-id")
 

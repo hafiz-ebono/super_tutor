@@ -247,10 +247,14 @@ export default function StudyPage() {
     const userMessage = chatInput.trim();
     setChatInput("");
     
-    // Clear any existing empty assistant message before starting new chat
+    // If a previous stream left a dangling empty assistant bubble, replace it with an error
     setChatHistory((prev) => {
-      const filtered = prev.filter(msg => !(msg.role === "assistant" && msg.content === ""));
-      return [...filtered, { role: "user" as const, content: userMessage }];
+      const resolved = prev.map((msg) =>
+        msg.role === "assistant" && msg.content === ""
+          ? { ...msg, content: "Sorry, something went wrong. Please try again." }
+          : msg
+      );
+      return [...resolved, { role: "user" as const, content: userMessage }];
     });
     
     setIsStreaming(true);
