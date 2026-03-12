@@ -9,7 +9,7 @@ See: .planning/PROJECT.md (updated 2026-03-07 after v4.0 milestone start)
 
 ## Current Position
 
-Phase: 8 of 10 (Storage and Workflow Foundation)
+Phase: 8 of 9 (Storage and Workflow Foundation)
 Plan: 2 of TBD
 Status: In progress
 Last activity: 2026-03-09 - Completed quick task 19: Add adequate logs in the codebase with appropriate error levels for debugging and observability
