@@ -532,11 +532,12 @@ def build_session_workflow(
 
 async def run_workflow_background(
     session_id: str,
-    session_type: str,       # "topic" | "url" | "paste"
+    session_type: str,       # "topic" | "url" | "paste" | "upload"
     source_content: str,     # pre-extracted content; "" for topic sessions
-    topic_description: str,  # raw topic string; "" for url/paste
+    topic_description: str,  # raw topic string; "" for url/paste/upload
     tutoring_type: str,
     focus_prompt: str = "",
+    source: str = "",        # original filename for upload sessions; "" for others
     generate_flashcards: bool = False,
     generate_quiz: bool = False,
     traces_db: SqliteDb | None = None,
@@ -572,6 +573,7 @@ async def run_workflow_background(
                 "session_id": session_id,
                 "session_type": session_type,
                 "source_content": source_content,
+                "source": source,
                 "topic_description": topic_description,
                 "tutoring_type": tutoring_type,
                 "focus_prompt": focus_prompt,
