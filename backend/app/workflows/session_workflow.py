@@ -275,6 +275,11 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
         session_state["sources"] = []
     session_state["chat_intro"] = CHAT_INTROS.get(tutoring_type, CHAT_INTROS["advanced"])
 
+    # Persist upload filename as source — used by GET /sessions/{id} response
+    source = data.get("source", "")
+    if source:
+        session_state["source"] = source
+
     return StepOutput(content=notes)
 
 

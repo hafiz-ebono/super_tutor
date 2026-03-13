@@ -256,6 +256,7 @@ async def get_session(session_id: str):
         "source_title": state.get("title", "Study Session"),
         "tutoring_type": state.get("tutoring_type", ""),
         "session_type": state.get("session_type", "url"),
+        "source": state.get("source", ""),
         "sources": state.get("sources", []),
         "notes": state.get("notes"),
         "flashcards": state.get("flashcards", []),
