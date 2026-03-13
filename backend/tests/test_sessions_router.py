@@ -180,7 +180,7 @@ def test_regenerate_unknown_section_returns_400(client):
     """POST /sessions/{id}/regenerate/invalid_section must return 400."""
     response = client.post(
         "/sessions/any-session-id/regenerate/invalid_section",
-        json={"notes": "some notes", "tutoring_type": "advanced"},
+        json={"tutoring_type": "advanced"},
     )
     assert response.status_code == 400
 
@@ -193,7 +193,7 @@ def test_regenerate_unknown_session_returns_404(client):
     ):
         response = client.post(
             "/sessions/nonexistent/regenerate/flashcards",
-            json={"notes": "some notes", "tutoring_type": "advanced"},
+            json={"tutoring_type": "advanced"},
         )
     assert response.status_code == 404
 
@@ -206,6 +206,67 @@ def test_regenerate_pending_session_returns_409(client):
     ):
         response = client.post(
             "/sessions/pending-session/regenerate/flashcards",
-            json={"notes": "some notes", "tutoring_type": "advanced"},
+            json={"tutoring_type": "advanced"},
         )
     assert response.status_code == 409
+
+
+def test_regenerate_flashcards_loads_notes_from_sqlite(client):
+    """POST /{id}/regenerate/flashcards with only tutoring_type reads notes from SQLite."""
+    inner_state = {"notes": "## Test Notes\n- item one", "tutoring_type": "advanced"}
+    mock_session = MagicMock()
+    mock_session.session_data = {"session_state": inner_state}
+    mock_workflow = MagicMock()
+    mock_workflow.get_session.return_value = mock_session
+
+    mock_agent = MagicMock()
+    mock_result = MagicMock()
+    mock_result.content = '[{"front": "Q", "back": "A"}]'
+    mock_agent.run.return_value = mock_result
+
+    with (
+        patch(
+            "app.routers.sessions.get_session_status",
+            return_value={"status": "complete", "error_kind": "", "error_message": ""},
+        ),
+        patch("app.routers.sessions.build_session_workflow", return_value=mock_workflow),
+        patch("app.routers.sessions._get_traces_db"),
+        patch("app.routers.sessions.build_flashcard_agent", return_value=mock_agent),
+        patch("app.routers.sessions.asyncio.to_thread", return_value=mock_result),
+    ):
+        response = client.post(
+            "/sessions/some-session-id/regenerate/flashcards",
+            json={"tutoring_type": "advanced"},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert "flashcards" in body
+
+
+def test_regenerate_returns_404_when_sqlite_has_no_notes(client):
+    """POST /{id}/regenerate/flashcards returns 404 when session state has no notes."""
+    mock_session = MagicMock()
+    mock_session.session_data = {"session_state": {}}  # no notes key
+    mock_workflow = MagicMock()
+    mock_workflow.get_session.return_value = mock_session
+
+    with (
+        patch(
+            "app.routers.sessions.get_session_status",
+            return_value={"status": "complete", "error_kind": "", "error_message": ""},
+        ),
+        patch("app.routers.sessions.build_session_workflow", return_value=mock_workflow),
+        patch("app.routers.sessions._get_traces_db"),
+    ):
+        response = client.post(
+            "/sessions/no-notes-session/regenerate/flashcards",
+            json={"tutoring_type": "advanced"},
+        )
+    assert response.status_code == 404
+
+
+def test_chat_stream_request_model_has_no_notes_field():
+    """ChatStreamRequest must not have a notes field — API-02 contract."""
+    from app.models.chat import ChatStreamRequest
+    fields = ChatStreamRequest.model_fields
+    assert "notes" not in fields, f"ChatStreamRequest must not have notes field, found: {list(fields.keys())}"
