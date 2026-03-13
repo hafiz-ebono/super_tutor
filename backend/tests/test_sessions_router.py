@@ -211,9 +211,9 @@ def test_regenerate_pending_session_returns_409(client):
     assert response.status_code == 409
 
 
-def test_regenerate_flashcards_loads_notes_from_sqlite(client):
-    """POST /{id}/regenerate/flashcards with only tutoring_type reads notes from SQLite."""
-    inner_state = {"notes": "## Test Notes\n- item one", "tutoring_type": "advanced"}
+def test_regenerate_flashcards_loads_source_content_from_sqlite(client):
+    """POST /{id}/regenerate/flashcards with only tutoring_type reads source_content from SQLite."""
+    inner_state = {"source_content": "Raw source text for flashcard generation.", "tutoring_type": "advanced"}
     mock_session = MagicMock()
     mock_session.session_data = {"session_state": inner_state}
     mock_workflow = MagicMock()
@@ -243,10 +243,10 @@ def test_regenerate_flashcards_loads_notes_from_sqlite(client):
     assert "flashcards" in body
 
 
-def test_regenerate_returns_404_when_sqlite_has_no_notes(client):
-    """POST /{id}/regenerate/flashcards returns 404 when session state has no notes."""
+def test_regenerate_returns_404_when_sqlite_has_no_source_content(client):
+    """POST /{id}/regenerate/flashcards returns 404 when session state has no source_content key."""
     mock_session = MagicMock()
-    mock_session.session_data = {"session_state": {}}  # no notes key
+    mock_session.session_data = {"session_state": {}}  # no source_content key
     mock_workflow = MagicMock()
     mock_workflow.get_session.return_value = mock_session
 
