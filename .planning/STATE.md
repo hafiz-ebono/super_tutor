@@ -9,9 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-12 after v4.0 milestone)
 
 ## Current Position
 
-Phase: — (between milestones)
-Status: v4.0 complete — planning v5.0
-Last activity: 2026-03-12 — Completed v4.0 milestone (Agentic Backend Refactor)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-13 — Milestone v5.0 started (API Simplification)
 
 Progress: [████████████████████] 100% (8/8 phases complete across all milestones)
 
