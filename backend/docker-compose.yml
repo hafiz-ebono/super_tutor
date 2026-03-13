@@ -7,9 +7,18 @@ services:
     container_name: super_tutor-backend
     ports:
       - "8000:8000"
+      - "5679:5679"
     volumes:
       - .:/app
+      - /app/__pycache__
     env_file:
       - .env
     environment:
       - ALLOWED_ORIGINS=http://localhost:3000
+      - PYTHONPATH=/app
+      - TZ=Asia/Kolkata
+      - DEBUGPY_ENABLED=true
+    command: >
+      sh -c "python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5679 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    stdin_open: true
+    tty: true

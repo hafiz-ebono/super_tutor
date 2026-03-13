@@ -246,12 +246,20 @@ export default function StudyPage() {
     if (!session || !chatInput.trim() || isStreaming) return;
     const userMessage = chatInput.trim();
     setChatInput("");
-    // Optimistically add user turn
-    const history = [...chatHistory, { role: "user" as const, content: userMessage }];
-    setChatHistory(history);
+    
+    // If a previous stream left a dangling empty assistant bubble, replace it with an error
+    setChatHistory((prev) => {
+      const resolved = prev.map((msg) =>
+        msg.role === "assistant" && msg.content === ""
+          ? { ...msg, content: "Sorry, something went wrong. Please try again." }
+          : msg
+      );
+      return [...resolved, { role: "user" as const, content: userMessage }];
+    });
+    
     setIsStreaming(true);
 
-    // Add empty assistant placeholder
+    // Add empty assistant placeholder for typing bubble
     setChatHistory((prev) => [...prev, { role: "assistant" as const, content: "" }]);
 
     try {
@@ -302,12 +310,23 @@ export default function StudyPage() {
                 }
                 return next;
               });
+              setIsStreaming(false);
+              return;
             }
           } catch {
             // Ignore non-JSON data lines (e.g. event: done line)
           }
         }
       }
+      
+      // Remove empty assistant message if stream completed without content
+      setChatHistory((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === "assistant" && last.content === "") {
+          return prev.slice(0, -1);
+        }
+        return prev;
+      });
     } catch {
       // Replace empty assistant placeholder with error message
       setChatHistory((prev) => {
@@ -738,16 +757,22 @@ export default function StudyPage() {
                         : "bg-zinc-100 text-zinc-900 rounded-bl-sm"
                     }`}
                   >
-                    {msg.content || (
-                      <span className="inline-flex gap-0.5 items-center h-4">
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </span>
-                    )}
+                    {msg.content}
                   </div>
                 </div>
               ))}
+              {/* Only show typing indicator if the last message is an empty assistant message and we're streaming */}
+              {isStreaming && chatHistory.length > 0 && chatHistory[chatHistory.length - 1]?.role === "assistant" && chatHistory[chatHistory.length - 1]?.content === "" && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed bg-zinc-100 text-zinc-900">
+                    <span className="inline-flex gap-0.5 items-center h-4">
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </span>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 

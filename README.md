@@ -132,7 +132,7 @@ super_tutor/
 │   │   ├── routers/    # /sessions and /chat endpoints
 │   │   ├── extraction/ # Content extraction (trafilatura)
 │   │   ├── models/     # Pydantic request/response models
-│   │   ├── utils/      # Retry logic
+│   │   ├── utils/      # Session status store + logging helpers
 │   │   └── config.py   # Settings (env-driven)
 │   └── requirements.txt
 │

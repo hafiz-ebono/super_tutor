@@ -15,7 +15,8 @@ def test_settings_no_provider_specific_keys():
     assert "groq_api_key" not in fields
 
 
-def test_agent_api_key_defaults_to_empty_string():
+def test_agent_api_key_defaults_to_empty_string(monkeypatch):
+    monkeypatch.delenv("AGENT_API_KEY", raising=False)
     from app.config import Settings
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.agent_api_key == ""

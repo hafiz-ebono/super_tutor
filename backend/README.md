@@ -47,7 +47,8 @@ backend/
 │   │   ├── session.py           # SessionRequest Pydantic model
 │   │   └── chat.py              # ChatStreamRequest Pydantic model
 │   └── utils/
-│       └── retry.py             # run_with_retry() + is_retryable()
+│       ├── session_status.py    # In-process session status store (create/update/get)
+│       └── logging.py           # Structured logging helpers
 └── requirements.txt
 ```
 
@@ -153,7 +154,7 @@ flowchart TD
     C --> D["asyncio.to_thread\nworkflow.run()"]
     D --> E[notes_step executor]
     E --> F[build_notes_agent]
-    F --> G[run_with_retry\nagent.run]
+    F --> G[agent.run]
     G --> H{notes length\n>= 100 chars?}
     H -- No --> I[raise RuntimeError]
     H -- Yes --> J[write to session_state\nAgno persists to SQLite]
@@ -171,9 +172,11 @@ flowchart TD
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/sessions` | Creates a pending session, returns `{session_id}` |
-| `GET` | `/sessions/{id}/stream` | Opens SSE stream, runs extraction + workflow pipeline |
-| `POST` | `/sessions/{id}/regenerate/{section}` | Generates flashcards or quiz on demand |
+| `POST` | `/sessions` | Creates a pending session, kicks off background pipeline, returns `{session_id}` |
+| `GET` | `/sessions/{id}` | Polls session status; returns full session data when complete |
+| `POST` | `/sessions/{id}/regenerate/{section}` | Generates flashcards or quiz on demand (guarded by `_guard_session`) |
+
+`_guard_session()` checks that the session exists and is complete before proceeding. Returns HTTP 404 for unknown/expired session IDs and HTTP 409 if the session is still processing.
 
 #### SSE Stream Events
 
