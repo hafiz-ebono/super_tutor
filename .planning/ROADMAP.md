@@ -131,7 +131,7 @@ Plans:
 
 **Milestone Goal:** Users can upload a PDF or Word document and create a full study session from it — same pipeline, third input path.
 
-- [ ] **Phase 11: Backend Foundation** - Source content storage wired into all session types; extraction module and regenerate agents updated
+- [x] **Phase 11: Backend Foundation** - Source content storage wired into all session types; extraction module and regenerate agents updated (completed 2026-03-13)
 - [ ] **Phase 12: Backend Upload Endpoint** - POST /sessions/upload multipart endpoint wires extraction into the full SSE pipeline
 - [ ] **Phase 13: Frontend Upload UI** - Third Upload tab on the home page with file input, validation, and error display
 
@@ -197,6 +197,6 @@ Plans:
 | 8. Storage and Workflow Foundation | v4.0 | 2/2 | Complete | 2026-03-12 |
 | 9. Backend API Simplification | v5.0 | 1/1 | Complete | 2026-03-13 |
 | 10. Frontend Cleanup | v5.0 | 1/1 | Complete | 2026-03-13 |
-| 11. Backend Foundation | 1/3 | In Progress|  | - |
+| 11. Backend Foundation | 3/3 | Complete   | 2026-03-13 | - |
 | 12. Backend Upload Endpoint | v6.0 | 0/TBD | Not started | - |
 | 13. Frontend Upload UI | v6.0 | 0/TBD | Not started | - |

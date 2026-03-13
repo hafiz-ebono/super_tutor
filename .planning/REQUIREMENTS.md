@@ -7,9 +7,9 @@
 
 ### Source Content Storage (cross-cutting — all session types)
 
-- [ ] **SRC-01**: All session types (URL, topic, upload) store `source_content` in SQLite session state after extraction
+- [x] **SRC-01**: All session types (URL, topic, upload) store `source_content` in SQLite session state after extraction
 - [x] **SRC-02**: A shared `clean_extracted_content()` utility normalises extracted text before it is stored — applied to both URL-extracted text (trafilatura output) and document-extracted text (pypdf/.docx output)
-- [ ] **SRC-03**: Flashcard and quiz regenerate agents load `source_content` from SQLite as primary generation material (replaces notes-only grounding for generation tasks)
+- [x] **SRC-03**: Flashcard and quiz regenerate agents load `source_content` from SQLite as primary generation material (replaces notes-only grounding for generation tasks)
 
 ### Upload Input Path
 
@@ -70,9 +70,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SRC-01 | Phase 11 | Pending |
+| SRC-01 | Phase 11 | Complete |
 | SRC-02 | Phase 11 | Complete |
-| SRC-03 | Phase 11 | Pending |
+| SRC-03 | Phase 11 | Complete |
 | UPLOAD-01 | Phase 13 | Pending |
 | UPLOAD-02 | Phase 13 | Pending |
 | UPLOAD-03 | Phase 13 | Pending |

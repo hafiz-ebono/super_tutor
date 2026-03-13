@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-13 after v6.0 milestone start)
 ## Current Position
 
 Phase: 11 of 13 (Backend Foundation)
-Plan: 1 of 4 complete
+Plan: 3 of 4 complete
 Status: In progress
-Last activity: 2026-03-14 — Completed 11-01: cleaner.py and document_extractor.py (41 tests passing)
+Last activity: 2026-03-14 — Completed 11-03: regenerate_section() reads source_content from SQLite (SRC-03)
 
-Progress: [██████████░░░] 77% (10/13 phases complete across all milestones; Phase 11 in progress 1/4 plans)
+Progress: [██████████░░░] 77% (10/13 phases complete across all milestones; Phase 11 in progress 3/4 plans)
 
 ## Performance Metrics
 
@@ -39,7 +39,7 @@ Progress: [██████████░░░] 77% (10/13 phases complete a
 | 10-frontend-cleanup | 1 | ~1min | ~1min |
 
 **Recent Trend:**
-- Last 5 plans: ~4min, ~2min, ~2min, ~1min, ~2min
+- Last 5 plans: ~4min, ~2min, ~2min, ~1min, ~1min
 - Trend: Stable (small focused plans executing fast)
 
 *Updated after each plan completion*
@@ -54,6 +54,11 @@ All decisions logged in PROJECT.md Key Decisions table (fully updated after v5.0
 - Module-level imports used for PdfReader/Document (not deferred) to enable unittest.mock patch targets at app.extraction.document_extractor.PdfReader
 - NFKC does not convert fancy quotes (U+201C/D) to ASCII — they are canonical Unicode; tests updated accordingly
 
+**11-03 decisions:**
+- source_content (not notes) is the authoritative input for flashcard/quiz regeneration — satisfies SRC-03
+- No 'Content:\n' framing prefix — input_text = source_content raw text per CONTEXT.md decision
+- No graceful fallback — missing source_content raises HTTP 404 immediately per CONTEXT.md
+
 Key architectural facts for v6.0:
 - `asyncio.to_thread()` required for all synchronous extraction calls in async FastAPI handlers (pypdf and python-docx are blocking; same pattern as existing workflow.run())
 - `document_extractor.py` must accept `bytes` and return `str` — never touch the filesystem
@@ -66,6 +71,8 @@ Key architectural facts for v6.0:
 - Phase 11 touches existing code (SessionWorkflow, sessions.py URL path, regenerate endpoint) AND introduces new extraction code — highest change surface of v6.0
 - Phase 12 is the upload HTTP layer only — extractor is a pure function already tested in Phase 11
 - Phase 13 is pure frontend — backend contract is stable before this phase begins
+- [Phase 11-backend-foundation]: Paste path uses source_type='document' (strip HTML tags) while URL/research paths use source_type='url' (preserve markdown)
+- [Phase 11-backend-foundation]: No test file changes needed in 11-02 — ASCII repeat string fixtures round-trip through cleaner unchanged
 
 ### Pending Todos
 
@@ -79,5 +86,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Completed 11-01-PLAN.md (cleaner.py + document_extractor.py)
+Stopped at: Completed 11-03-PLAN.md (regenerate_section uses source_content from SQLite)
 Resume file: None
