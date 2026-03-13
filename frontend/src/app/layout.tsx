@@ -33,6 +33,18 @@ export default function RootLayout({
           </Link>
         </header>
         {children}
+        <footer className="border-t border-zinc-100 py-4 text-center text-xs text-zinc-400">
+          Made with ♥ by{" "}
+          <a
+            href="https://www.linkedin.com/in/hafiz408/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:text-blue-600 transition-colors"
+          >
+            Hafiz
+          </a>
+          {" "}· 2026
+        </footer>
       </body>
     </html>
   );
