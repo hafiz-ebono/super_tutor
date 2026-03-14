@@ -57,6 +57,8 @@ export default function StudyPage() {
 
   const { saveSession, evictionToast } = useRecentSessions();
 
+  const MAX_MESSAGES = 20; // 10 user + 10 assistant exchanges
+
   const [chatOpen, setChatOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; content: string }[]>(() => {
     try {
@@ -64,6 +66,13 @@ export default function StudyPage() {
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
+    }
+  });
+  const [chatResetId, setChatResetId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(`chat_reset_id:${sessionId}`) ?? "v0";
+    } catch {
+      return "v0";
     }
   });
   const [chatInput, setChatInput] = useState("");
@@ -81,12 +90,20 @@ export default function StudyPage() {
     });
   }
 
-  // Persist chat history to localStorage whenever it changes
+  // Persist chat history and reset ID to localStorage whenever they change
   useEffect(() => {
     if (chatHistory.length > 0) {
       localStorage.setItem(`chat:${sessionId}`, JSON.stringify(chatHistory));
     }
   }, [chatHistory, sessionId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`chat_reset_id:${sessionId}`, chatResetId);
+    } catch {
+      // ignore
+    }
+  }, [chatResetId, sessionId]);
 
   // Auto-scroll chat to bottom when chatHistory changes
   useEffect(() => {
@@ -247,6 +264,18 @@ export default function StudyPage() {
     }
   }
 
+  function resetChat() {
+    const newResetId = `v${Date.now()}`;
+    setChatResetId(newResetId);
+    setChatHistory([]);
+    try {
+      localStorage.removeItem(`chat:${sessionId}`);
+      localStorage.setItem(`chat_reset_id:${sessionId}`, newResetId);
+    } catch {
+      // ignore
+    }
+  }
+
   async function sendMessage() {
     if (!session || !chatInput.trim() || isStreaming) return;
     const userMessage = chatInput.trim();
@@ -275,6 +304,7 @@ export default function StudyPage() {
           message: userMessage,
           session_id: sessionId,
           tutoring_type: session.tutoring_type,
+          chat_reset_id: chatResetId,
         }),
       });
 
@@ -695,21 +725,15 @@ export default function StudyPage() {
 
       {session && session.notes && (
         <>
-          {/* Floating chat bubble */}
+          {/* Floating chat bubble — hidden while panel is open */}
           <button
-            onClick={() => setChatOpen((o) => !o)}
+            onClick={() => setChatOpen(true)}
             aria-label="Open chat"
-            className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-[60] w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg flex items-center justify-center transition-colors"
+            className={`fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-[60] w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg flex items-center justify-center transition-all duration-200 ${chatOpen ? "opacity-0 pointer-events-none" : "opacity-100"}`}
           >
-            {chatOpen ? (
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z" />
-              </svg>
-            )}
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z" />
+            </svg>
           </button>
 
           {/* Sliding chat panel */}
@@ -723,6 +747,16 @@ export default function StudyPage() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 shrink-0">
               <span className="text-sm font-semibold text-zinc-900">Ask about this session</span>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={resetChat}
+                  aria-label="Reset chat"
+                  title="Start a new conversation"
+                  className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
                 <button
                   onClick={() => setChatOpen(false)}
                   aria-label="Close chat"
@@ -782,40 +816,52 @@ export default function StudyPage() {
             </div>
 
             {/* Input area */}
-            <div className="shrink-0 px-3 py-3 border-t border-zinc-100 flex gap-2 items-end">
-              <textarea
-                ref={textareaRef}
-                value={chatInput}
-                onChange={(e) => {
-                  setChatInput(e.target.value);
-                  const el = e.target;
-                  el.style.height = "auto";
-                  el.style.height = `${el.scrollHeight}px`;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                disabled={isStreaming}
-                placeholder="Ask a question..."
-                rows={1}
-                className="flex-1 resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-blue-400 focus:bg-white transition-colors disabled:opacity-50"
-                style={{ maxHeight: "120px" }}
-              />
-              <button
-                onClick={sendMessage}
-                disabled={isStreaming || !chatInput.trim()}
-                aria-label="Send"
-                className="shrink-0 w-9 h-9 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L15 22 11 13 2 9l20-7z" />
-                </svg>
-              </button>
-            </div>
+            {chatHistory.length >= MAX_MESSAGES ? (
+              <div className="shrink-0 px-4 py-4 border-t border-zinc-100 text-center">
+                <p className="text-xs text-zinc-500 mb-2">Conversation limit reached.</p>
+                <button
+                  onClick={resetChat}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium underline underline-offset-2"
+                >
+                  Reset to start a new conversation
+                </button>
+              </div>
+            ) : (
+              <div className="shrink-0 px-3 py-3 border-t border-zinc-100 flex gap-2 items-end">
+                <textarea
+                  ref={textareaRef}
+                  value={chatInput}
+                  onChange={(e) => {
+                    setChatInput(e.target.value);
+                    const el = e.target;
+                    el.style.height = "auto";
+                    el.style.height = `${el.scrollHeight}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  disabled={isStreaming}
+                  placeholder="Ask a question..."
+                  rows={1}
+                  className="flex-1 resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-blue-400 focus:bg-white transition-colors disabled:opacity-50"
+                  style={{ maxHeight: "120px" }}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={isStreaming || !chatInput.trim()}
+                  aria-label="Send"
+                  className="shrink-0 w-9 h-9 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L15 22 11 13 2 9l20-7z" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}

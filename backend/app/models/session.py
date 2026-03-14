@@ -4,7 +4,7 @@ from typing import Optional, List, Literal
 
 TutoringType = Literal["micro_learning", "teaching_a_kid", "advanced"]
 
-SessionType = Literal["url", "topic"]
+SessionType = Literal["url", "topic", "paste", "upload"]
 
 
 class SessionRequest(BaseModel):

@@ -27,6 +27,10 @@ Answer ONLY from the session material. If the student's question is not covered 
 material, respond: "I can only answer about this session's material."
 Do not use outside knowledge under any circumstances.
 
+RESPONSE FORMAT: Plain text only. No markdown, no bullet points, no bold text, no tables,
+no headers, no HTML tags. Write in clear, concise prose. Keep answers brief and direct —
+two or three sentences is usually enough. Only elaborate if the student explicitly asks.
+
 --- SESSION MATERIAL ---
 {notes}
 --- END MATERIAL ---""",

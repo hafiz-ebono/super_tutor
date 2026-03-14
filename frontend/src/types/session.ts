@@ -1,6 +1,6 @@
 export type TutoringType = "micro_learning" | "teaching_a_kid" | "advanced";
 
-export type SessionType = "url" | "topic" | "paste";
+export type SessionType = "url" | "topic" | "paste" | "upload";
 
 export interface SessionRequest {
   url?: string;
@@ -61,6 +61,12 @@ const BASE_STEPS_TOPIC = [
   "Generating title...",
 ] as const;
 
+const BASE_STEPS_UPLOAD = [
+  "Extracting document...",
+  "Crafting your notes...",
+  "Generating title...",
+] as const;
+
 export const FLASHCARD_STEP = "Creating flashcards..." as const;
 export const QUIZ_STEP = "Building quiz questions..." as const;
 
@@ -69,12 +75,14 @@ export const QUIZ_STEP = "Building quiz questions..." as const;
  * Mirrors the server-side workflow step order.
  */
 export function buildProgressSteps(
-  inputMode: "url" | "topic" | "paste",
+  inputMode: "url" | "topic" | "paste" | "upload",
   generateFlashcards: boolean,
   generateQuiz: boolean,
 ): string[] {
   const base = inputMode === "topic"
     ? [...BASE_STEPS_TOPIC]
+    : inputMode === "upload"
+    ? [...BASE_STEPS_UPLOAD]
     : [...BASE_STEPS_URL];
 
   const titleIndex = base.indexOf("Generating title...");

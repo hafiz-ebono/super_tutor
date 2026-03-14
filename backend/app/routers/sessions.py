@@ -256,6 +256,7 @@ async def get_session(session_id: str):
         "source_title": state.get("title", "Study Session"),
         "tutoring_type": state.get("tutoring_type", ""),
         "session_type": state.get("session_type", "url"),
+        "source": state.get("source", ""),
         "sources": state.get("sources", []),
         "notes": state.get("notes"),
         "flashcards": state.get("flashcards", []),
@@ -274,7 +275,7 @@ class RegenerateRequest(BaseModel):
 
 @router.post("/{session_id}/regenerate/{section}")
 async def regenerate_section(session_id: str, section: str, body: RegenerateRequest):
-    """Generates flashcards or quiz on demand using notes loaded from SQLite session state."""
+    """Generates flashcards or quiz on demand using source_content loaded from SQLite session state."""
     if section not in ("flashcards", "quiz"):
         raise HTTPException(status_code=400, detail="section must be 'flashcards' or 'quiz'")
 
@@ -285,14 +286,14 @@ async def regenerate_section(session_id: str, section: str, body: RegenerateRequ
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
     state = (existing.session_data or {}).get("session_state", {})
-    notes = state.get("notes", "")
-    if not notes:
+    source_content = state.get("source_content", "")
+    if not source_content:
         raise HTTPException(
             status_code=404,
-            detail=f"Session '{session_id}' has no notes. Cannot regenerate.",
+            detail=f"Session '{session_id}' has no source content. Cannot regenerate.",
         )
 
-    input_text = f"Content:\n{notes}"
+    input_text = source_content
     logger.info(
         "Generating %s — session_id=%s tutoring_type=%s",
         section, session_id, body.tutoring_type,

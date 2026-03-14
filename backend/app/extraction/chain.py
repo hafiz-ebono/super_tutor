@@ -1,5 +1,6 @@
 import logging
 
+from app.extraction.cleaner import clean_extracted_content
 from app.extraction.trafilatura_extractor import fetch_via_trafilatura
 
 logger = logging.getLogger("super_tutor.extraction")
@@ -26,8 +27,9 @@ def _classify_failure(url: str) -> str:
 async def extract_content(url: str) -> str:
     text = fetch_via_trafilatura(url)
     if text:
-        logger.info("Extraction success — layer=trafilatura url=%s chars=%d", url, len(text))
-        return text
+        cleaned = clean_extracted_content(text, source_type="url")
+        logger.info("Extraction success — layer=trafilatura url=%s chars=%d", url, len(cleaned))
+        return cleaned
     logger.warning("Extraction failed — url=%s kind=%s", url, _classify_failure(url))
     raise ExtractionError(
         kind=_classify_failure(url),

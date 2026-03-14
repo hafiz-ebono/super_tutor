@@ -5,7 +5,7 @@ import Link from "next/link";
 import { TutoringType, SessionRequest } from "@/types/session";
 import { useRecentSessions } from "@/app/hooks/useRecentSessions";
 
-type InputMode = "url" | "topic";
+type InputMode = "url" | "topic" | "upload";
 
 const TUTORING_MODES: { id: TutoringType; label: string; description: string }[] = [
   { id: "micro_learning", label: "Micro Learning", description: "Short, punchy bullets. Just the essentials, fast." },
@@ -44,14 +44,147 @@ function CreateForm() {
   const [pasteText, setPasteText] = useState("");
   const [generateFlashcards, setGenerateFlashcards] = useState(false);
   const [generateQuiz, setGenerateQuiz] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<{ error_kind: string; message: string } | null>(null);
+  const [uploadProgressMessage, setUploadProgressMessage] = useState<string | null>(null);
 
   const { saveSession } = useRecentSessions();
 
+  const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setFileError(null);
+    setUploadError(null);
+    if (!file) { setSelectedFile(null); return; }
+    if (file.size > MAX_FILE_BYTES) {
+      setFileError("File is too large. Maximum file size is 20 MB.");
+      setSelectedFile(null);
+      e.target.value = ""; // reset so same file can be re-selected after correction
+      return;
+    }
+    setSelectedFile(file);
+  }
+
   const errorMessages = errorKind ? ERROR_MESSAGES[errorKind] ?? ERROR_MESSAGES.empty : null;
+
+  async function handleUploadSubmit() {
+    if (!selectedMode || !selectedFile) return;
+    setIsSubmitting(true);
+    setUploadError(null);
+    setUploadProgressMessage("Uploading your file...");
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("tutoring_type", selectedMode);
+    if (focusPrompt) formData.append("focus_prompt", focusPrompt);
+    formData.append("generate_flashcards", String(generateFlashcards));
+    formData.append("generate_quiz", String(generateQuiz));
+
+    let res: Response;
+    try {
+      res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sessions/upload`, {
+        method: "POST",
+        body: formData,
+        // DO NOT set Content-Type — browser sets multipart/form-data with correct boundary automatically
+      });
+    } catch {
+      setUploadError({ error_kind: "network_error", message: "Could not reach the server. Check your connection and try again." });
+      setIsSubmitting(false);
+      setUploadProgressMessage(null);
+      return;
+    }
+
+    // Pre-stream HTTP errors (400 unsupported_format, 413 file_too_large, 422 scanned_pdf)
+    if (!res.ok) {
+      try {
+        const errBody = await res.json();
+        const detail = errBody.detail ?? {};
+        setUploadError({
+          error_kind: detail.error_kind ?? "upload_error",
+          message: detail.message ?? "Upload failed. Please try again.",
+        });
+      } catch {
+        setUploadError({ error_kind: "upload_error", message: "Upload failed. Please try again." });
+      }
+      setIsSubmitting(false);
+      setUploadProgressMessage(null);
+      return;
+    }
+
+    // SSE stream — session_id arrives in the 'complete' event
+    if (!res.body) {
+      setUploadError({ error_kind: "upload_error", message: "No response stream. Please try again." });
+      setIsSubmitting(false);
+      setUploadProgressMessage(null);
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let currentEvent = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            const raw = line.slice(6).trim();
+            if (!raw) continue;
+            try {
+              const parsed = JSON.parse(raw);
+              if (currentEvent === "progress" && parsed.message) {
+                setUploadProgressMessage(parsed.message);
+              } else if (currentEvent === "complete" && parsed.session_id) {
+                saveSession({
+                  session_id: parsed.session_id,
+                  source_title: selectedFile.name,
+                  tutoring_type: selectedMode,
+                  session_type: "upload",
+                });
+                router.push(`/study/${parsed.session_id}`);
+                return;
+              } else if (currentEvent === "error") {
+                setUploadError({
+                  error_kind: parsed.error_kind ?? "workflow_error",
+                  message: parsed.message ?? "An error occurred during processing.",
+                });
+                setIsSubmitting(false);
+                setUploadProgressMessage(null);
+                return;
+              }
+            } catch {
+              // Ignore non-JSON lines
+            }
+          }
+        }
+      }
+    } catch {
+      setUploadError({ error_kind: "workflow_error", message: "Connection lost during upload. Please try again." });
+      setIsSubmitting(false);
+      setUploadProgressMessage(null);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedMode) return;
+
+    // Upload mode has its own SSE-based submission path
+    if (inputMode === "upload") {
+      await handleUploadSubmit();
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorKind(null);
 
@@ -141,7 +274,7 @@ function CreateForm() {
         <div className="flex rounded-lg border border-zinc-200 overflow-hidden w-full sm:w-auto">
           <button
             type="button"
-            onClick={() => { setInputMode("url"); setTopicDescription(""); }}
+            onClick={() => { setInputMode("url"); setTopicDescription(""); setUploadError(null); setUploadProgressMessage(null); }}
             className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-colors ${
               inputMode === "url" ? "bg-zinc-900 text-white" : "bg-white text-zinc-500 hover:bg-zinc-50"
             }`}
@@ -150,12 +283,21 @@ function CreateForm() {
           </button>
           <button
             type="button"
-            onClick={() => { setInputMode("topic"); setUrl(""); }}
+            onClick={() => { setInputMode("topic"); setUrl(""); setUploadError(null); setUploadProgressMessage(null); }}
             className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-colors ${
               inputMode === "topic" ? "bg-zinc-900 text-white" : "bg-white text-zinc-500 hover:bg-zinc-50"
             }`}
           >
             Topic description
+          </button>
+          <button
+            type="button"
+            onClick={() => { setInputMode("upload"); setUrl(""); setTopicDescription(""); setSelectedFile(null); setFileError(null); setUploadError(null); setUploadProgressMessage(null); }}
+            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-colors ${
+              inputMode === "upload" ? "bg-zinc-900 text-white" : "bg-white text-zinc-500 hover:bg-zinc-50"
+            }`}
+          >
+            Upload file
           </button>
         </div>
 
@@ -202,6 +344,59 @@ function CreateForm() {
                 Your topic is quite broad — consider adding more detail for better results.
               </p>
             )}
+          </div>
+        )}
+
+        {/* File upload input — replaced by spinner while streaming */}
+        {inputMode === "upload" && isSubmitting && (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <span className="spinner" />
+            <p className="text-sm text-zinc-600 text-center">
+              {uploadProgressMessage ?? "Processing your file..."}
+            </p>
+          </div>
+        )}
+
+        {inputMode === "upload" && !isSubmitting && (
+          <div className="flex flex-col gap-2">
+            <label htmlFor="file_upload" className="text-sm font-medium text-zinc-900">
+              Upload a PDF or Word document
+            </label>
+            <input
+              id="file_upload"
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleFileChange}
+              className="w-full text-sm text-zinc-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200 transition-colors cursor-pointer"
+            />
+            {fileError && (
+              <p className="text-xs text-red-500" role="alert">{fileError}</p>
+            )}
+            {selectedFile && !fileError && (
+              <p className="text-xs text-zinc-500">
+                Selected: {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Upload error display — error_kind-aware messaging */}
+        {inputMode === "upload" && uploadError && (
+          <div className="flex flex-col gap-2 p-4 rounded-xl border border-red-200 bg-red-50" role="alert">
+            <p className="font-semibold text-sm text-red-700">
+              {uploadError.error_kind === "scanned_pdf"
+                ? "This PDF can't be read"
+                : uploadError.error_kind === "file_too_large"
+                ? "File too large"
+                : uploadError.error_kind === "unsupported_format"
+                ? "Unsupported file type"
+                : "Upload failed"}
+            </p>
+            <p className="text-xs text-red-600">
+              {uploadError.error_kind === "scanned_pdf"
+                ? "This PDF appears to be scanned or image-only — we can't extract text from it. Try a text-based PDF, or use the Topic tab to learn about the subject instead."
+                : uploadError.message}
+            </p>
           </div>
         )}
 
@@ -286,7 +481,8 @@ function CreateForm() {
             isSubmitting ||
             (pasteText.length > 0 && pasteText.length < 200) ||
             (inputMode === "topic" && !pasteText && topicDescription.length < 10) ||
-            (inputMode === "url" && !pasteText && !url.trim())
+            (inputMode === "url" && !pasteText && !url.trim()) ||
+            (inputMode === "upload" && !selectedFile)
           }
         >
           {isSubmitting ? "Starting..." : "Generate my study session →"}

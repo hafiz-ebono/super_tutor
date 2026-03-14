@@ -64,7 +64,7 @@ function LoadingContent() {
   const sessionId = searchParams.get("session_id");
   const tutoringType = searchParams.get("tutoring_type") ?? "";
   const focusPrompt = searchParams.get("focus_prompt") ?? "";
-  const inputMode = (searchParams.get("input_mode") ?? "url") as "url" | "topic" | "paste";
+  const inputMode = (searchParams.get("input_mode") ?? "url") as "url" | "topic" | "paste" | "upload";
   const generateFlashcards = searchParams.get("generate_flashcards") === "true";
   const generateQuiz = searchParams.get("generate_quiz") === "true";
 

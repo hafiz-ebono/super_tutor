@@ -68,7 +68,12 @@ async def chat_stream(request: ChatStreamRequest):
     # Namespace the chat session_id to avoid colliding with the workflow session row.
     # agno_sessions uses session_id as primary key — sharing the same id would cause
     # the chat agent to overwrite the workflow's session_data (which holds the notes).
-    chat_session_id = f"chat:{request.session_id}"
+    # If the client sends a chat_reset_id, append it so the agent starts a fresh DB session.
+    chat_session_id = (
+        f"chat:{request.session_id}:{request.chat_reset_id}"
+        if request.chat_reset_id
+        else f"chat:{request.session_id}"
+    )
 
     agent = build_chat_agent(request.tutoring_type, notes, db=_get_traces_db())
 
