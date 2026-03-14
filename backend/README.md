@@ -1,6 +1,6 @@
 # Super Tutor — Backend
 
-FastAPI + [Agno](https://docs.agno.com) backend that powers the Super Tutor study session pipeline. Provides SSE-streaming endpoints for session creation and real-time chat, backed by five AI agents, a workflow engine, and SQLite-based tracing.
+FastAPI + [Agno](https://docs.agno.com) backend that powers the Super Tutor study session pipeline. Provides SSE-streaming endpoints for session creation, file upload, and real-time chat, backed by five AI agents, a workflow engine, and SQLite-based tracing.
 
 ---
 
@@ -10,7 +10,8 @@ FastAPI + [Agno](https://docs.agno.com) backend that powers the Super Tutor stud
 |-------|-----------|
 | API framework | FastAPI + uvicorn |
 | AI agent framework | Agno >= 2.5.7 |
-| Content extraction | trafilatura |
+| Content extraction (URL) | trafilatura |
+| Content extraction (files) | pypdf + python-docx |
 | Web research | Tavily (via `agno.tools.tavily`) |
 | Session + trace storage | SQLite (via `agno.db.sqlite.SqliteDb`) |
 | Observability UI | AgentOS (Agno control plane) |
@@ -38,17 +39,25 @@ backend/
 │   ├── workflows/
 │   │   └── session_workflow.py  # Agno Workflow + Step (notes pipeline + SSE)
 │   ├── routers/
-│   │   ├── sessions.py          # POST /sessions, GET /sessions/{id}/stream, POST /sessions/{id}/regenerate/{section}
+│   │   ├── sessions.py          # POST /sessions, GET /sessions/{id}, POST /sessions/{id}/regenerate/{section}
+│   │   ├── upload.py            # POST /sessions/upload (PDF/DOCX file upload)
 │   │   └── chat.py              # POST /chat/stream
 │   ├── extraction/
-│   │   ├── chain.py             # extract_content() orchestrator + ExtractionError
-│   │   └── trafilatura_extractor.py  # trafilatura fetch wrapper
+│   │   ├── chain.py                  # extract_content() orchestrator + ExtractionError
+│   │   ├── trafilatura_extractor.py  # trafilatura fetch wrapper
+│   │   ├── document_extractor.py     # PDF/DOCX in-memory text extraction
+│   │   └── cleaner.py                # Text normalisation shared by all extractors
 │   ├── models/
 │   │   ├── session.py           # SessionRequest Pydantic model
 │   │   └── chat.py              # ChatStreamRequest Pydantic model
 │   └── utils/
 │       ├── session_status.py    # In-process session status store (create/update/get)
 │       └── logging.py           # Structured logging helpers
+├── tests/
+│   ├── test_sessions_router.py
+│   ├── test_upload_router.py
+│   ├── test_document_extractor.py
+│   └── test_cleaner.py
 └── requirements.txt
 ```
 
@@ -89,8 +98,9 @@ Produces comprehensive markdown study notes from provided content.
 Stateless Q&A agent grounded strictly in session notes.
 
 - Session notes are injected into the system prompt at construction time
+- Notes are loaded server-side from SQLite using `session_id` — the client does not supply notes
 - Refuses to use outside knowledge — responds only from session material
-- History is passed as a `List[Message]` on every request (client-side 6-turn cap)
+- Supports `chat_reset_id`: appended to the Agno session key so a reset starts a fresh conversation history in SQLite
 - Supports streaming via `agent.arun(stream=True)`
 
 ---
@@ -162,7 +172,7 @@ flowchart TD
     K --> L[yield: workflow_completed\n{notes, title, sources, ...}]
 ```
 
-**Session state** is persisted to SQLite by Agno's `save_session()` in the finally block — this is automatic when `session_state` is mutated inside the step executor.
+**Session state** is persisted to SQLite by Agno's `save_session()` in the finally block — this is automatic when `session_state` is mutated inside the step executor. Both `notes` and `source_content` are stored, so regenerate endpoints can reload them without requiring the client to re-send the original material.
 
 ---
 
@@ -174,7 +184,7 @@ flowchart TD
 |--------|------|-------------|
 | `POST` | `/sessions` | Creates a pending session, kicks off background pipeline, returns `{session_id}` |
 | `GET` | `/sessions/{id}` | Polls session status; returns full session data when complete |
-| `POST` | `/sessions/{id}/regenerate/{section}` | Generates flashcards or quiz on demand (guarded by `_guard_session`) |
+| `POST` | `/sessions/{id}/regenerate/{section}` | Generates flashcards or quiz on demand; loads source content from SQLite |
 
 `_guard_session()` checks that the session exists and is complete before proceeding. Returns HTTP 404 for unknown/expired session IDs and HTTP 409 if the session is still processing.
 
@@ -207,14 +217,34 @@ flowchart TD
 
 ---
 
+### Upload Router — `app/routers/upload.py`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/sessions/upload` | Accepts a PDF or DOCX file via multipart/form-data; validates, extracts text, then streams session-creation progress via SSE |
+
+**Pre-stream validation** (errors return plain HTTP, not SSE):
+
+| Check | Error |
+|-------|-------|
+| Extension not `.pdf` or `.docx` | HTTP 400 |
+| File size > 20 MB | HTTP 413 |
+| Scanned/image-only PDF (no extractable text) | HTTP 422 with `error_kind: scanned_pdf` |
+
+After validation passes, the router streams the same SSE events as the sessions router (`progress`, `complete`, `error`).
+
+---
+
 ### Chat Router — `app/routers/chat.py`
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/chat/stream` | SSE token stream for a single chat turn |
 
-- Accepts `{message, notes, tutoring_type, history, session_id}`
+- Accepts `{message, tutoring_type, session_id, chat_reset_id?}`
+- **Notes are loaded server-side from SQLite** using `session_id` — the client does not send notes
 - Builds a new `ChatAgent` per request with notes injected into the system prompt
+- `chat_reset_id`: optional field; when provided, appended to the Agno session key so the agent starts a fresh conversation history (used by the "reset chat" button on the frontend)
 - Streams tokens as `event: token` SSE events
 - Terminates with `event: done`
 
@@ -222,17 +252,42 @@ flowchart TD
 
 ## Content Extraction
 
-**File:** `app/extraction/chain.py`
+### URL Extraction — `app/extraction/chain.py`
 
 ```mermaid
 flowchart LR
     URL --> trafilatura["fetch_via_trafilatura"]
-    trafilatura -- text --> Return[return content]
+    trafilatura -- text --> Clean["clean_extracted_content\nsource_type='url'"]
+    Clean --> Return[return content]
     trafilatura -- empty --> Classify["_classify_failure\npaywall / invalid_url / empty"]
     Classify --> ExtractionError
 ```
 
 Paywall domains are classified specifically (`nytimes.com`, `wsj.com`, `ft.com`, `bloomberg.com`, `economist.com`) so the frontend can show targeted guidance.
+
+### Document Extraction — `app/extraction/document_extractor.py`
+
+In-memory extraction (never writes to disk) for PDF and DOCX files.
+
+```mermaid
+flowchart LR
+    Bytes["file bytes (BytesIO)"] --> Detect{extension}
+    Detect -- .pdf --> PdfReader
+    Detect -- .docx --> DocxReader
+    PdfReader -- text < 200 chars --> ScannedError["DocumentExtractionError\nscanned_pdf"]
+    PdfReader -- text >= 200 chars --> Clean["clean_extracted_content\nsource_type='document'"]
+    DocxReader --> Clean
+    Clean -- > 50k chars --> Truncate["truncate + append marker"]
+    Clean --> Return[return content]
+```
+
+### Text Cleaner — `app/extraction/cleaner.py`
+
+Shared normalisation step applied after both URL and document extraction:
+
+- Normalises Unicode, collapses whitespace, strips control characters
+- `source_type='document'`: also strips residual HTML tags (common in pypdf output)
+- `source_type='url'`: preserves trafilatura markdown markup
 
 ---
 
@@ -280,8 +335,8 @@ All settings are read from `.env` via `pydantic-settings`:
 | `AGENT_API_KEY` | *(required)* | API key for the provider |
 | `AGENT_FALLBACK_MODEL` | `""` | Optional fallback model on retry |
 | `AGENT_MAX_RETRIES` | `3` | Max retry attempts per agent call |
-| `TRACE_DB_PATH` | `tmp/super_tutor_traces.db` | SQLite path for agent traces |
-| `SESSION_DB_PATH` | `tmp/super_tutor_sessions.db` | SQLite path for session state |
+| `TRACE_DB_PATH` | `tmp/super_tutor_traces.db` | SQLite path for agent traces + workflow session state |
+| `SESSION_DB_PATH` | `tmp/super_tutor_sessions.db` | SQLite path for session lifecycle status |
 | `ALLOWED_ORIGINS` | `http://localhost:3000` | CORS origins (comma-separated or JSON array) |
 | `TAVILY_API_KEY` | *(optional)* | Required for topic-mode research sessions |
 

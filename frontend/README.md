@@ -1,6 +1,6 @@
 # Super Tutor — Frontend
 
-Next.js 14 (App Router) frontend for Super Tutor. Provides the session creation form, a real-time SSE progress screen, and an interactive study view with notes, flashcards, quiz, and a grounded chat panel.
+Next.js 14 (App Router) frontend for Super Tutor. Provides the session creation form (URL, topic, paste, or file upload), a real-time SSE progress screen, and an interactive study view with notes, flashcards, quiz, and a grounded chat panel.
 
 ---
 
@@ -25,7 +25,7 @@ frontend/src/
 │   ├── layout.tsx                    # Root layout (nav, global styles)
 │   ├── page.tsx                      # Landing page — hero + feature cards + recent sessions
 │   ├── create/
-│   │   └── page.tsx                  # Session creation form
+│   │   └── page.tsx                  # Session creation form (URL / topic / paste / upload tabs)
 │   ├── loading/
 │   │   └── page.tsx                  # SSE progress screen (EventSource consumer)
 │   └── study/
@@ -55,21 +55,28 @@ frontend/src/
 
 **File:** `src/app/create/page.tsx`
 
-The session creation form. Handles two input modes:
+The session creation form. Handles four input modes:
 
 ```mermaid
 flowchart TD
-    A[Select tutoring mode\nmicro_learning / teaching_a_kid / advanced] --> B{Input mode toggle}
+    A[Select tutoring mode\nmicro_learning / teaching_a_kid / advanced] --> B{Input mode tab}
     B -- Article URL --> C[URL input field]
     B -- Topic description --> D[Topic textarea]
-    C -- URL extraction fails --> E[Inline error + paste fallback textarea]
-    D --> F[Focus prompt\noptional]
-    E --> F
-    F --> G[Submit: POST /sessions]
-    G --> H[navigate /loading?session_id=...]
+    B -- Paste text --> E[Paste textarea]
+    B -- Upload file --> F[PDF or DOCX file picker\nmax 20 MB]
+    C -- URL extraction fails --> G[Inline error + paste fallback textarea]
+    D --> H[Focus prompt\noptional]
+    E --> H
+    G --> H
+    F --> I[handleUploadSubmit\nPOST /sessions/upload multipart/form-data\ninline SSE consumer]
+    H --> J[Submit: POST /sessions]
+    J --> K[navigate /loading?session_id=...]
+    I -- progress/complete events --> L[navigate /loading?session_id=...\nor show error inline]
 ```
 
 **Error recovery:** If a URL session fails (paywall, invalid URL, empty content), the user is redirected back to `/create` with `?error=<kind>` query params. The form restores their tutoring mode and focus prompt, and reveals a paste-text fallback input.
+
+**Upload flow:** The upload tab POSTs directly to `POST /sessions/upload` as `multipart/form-data` and consumes the SSE stream inline (no redirect to `/loading` until the `complete` event arrives). Pre-stream validation errors from the server (400/413/422) are displayed inline in the upload tab.
 
 ---
 
@@ -96,7 +103,7 @@ sequenceDiagram
     ES-->>Page: navigate /create?error=...
 ```
 
-**Progress bar:** Advances through two weight steps (`[20%, 100%]`) as SSE `progress` events arrive, giving visual feedback even before the final `complete` event.
+**Progress bar:** Advances through weighted steps derived from `buildProgressSteps()` as SSE `progress` events arrive, giving visual feedback even before the final `complete` event. Steps are calculated from `inputMode`, `generateFlashcards`, and `generateQuiz` flags stored in `localStorage` before navigation.
 
 ---
 
@@ -134,10 +141,11 @@ flowchart TD
 #### Chat Panel
 
 - Floating button (bottom-right) toggles a slide-in panel
+- Opens with a persona-adapted greeting (`chat_intro` from `SessionResult`)
 - Streams tokens from `POST /chat/stream` using `ReadableStream` + `TextDecoder`
-- Chat history persisted to `localStorage` as `chat:{sessionId}`
-- History is capped at 6 prior turns before sending to the backend (client-side cap)
-- History is stateless — the full window is sent on every request
+- Sends only `{message, tutoring_type, session_id, chat_reset_id?}` — notes are loaded server-side from SQLite, not sent by the client
+- "Reset chat" button generates a new `chat_reset_id` (UUID) so the backend starts a fresh conversation history
+- Chat history is persisted to `localStorage` as `chat:{sessionId}` and displayed client-side
 
 ---
 
@@ -145,7 +153,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    Create["Create Page\n/create"] -- POST /sessions --> API
+    Create["Create Page\n/create"] -- POST /sessions\nor POST /sessions/upload --> API
     API -- session_id --> Loading["Loading Page\n/loading"]
     Loading -- EventSource SSE --> API
     API -- complete event\nSessionResult --> Loading
@@ -168,13 +176,13 @@ There is no global state library. State lives in:
 | Store | Contents | TTL |
 |-------|----------|-----|
 | `localStorage: session:{id}` | Full `SessionResult` | Until cleared by browser / user |
-| `localStorage: chat:{id}` | Chat history array | Until cleared by browser / user |
+| `localStorage: chat:{id}` | Chat history array (display only) | Until cleared by browser / user |
 | `localStorage: super_tutor_recent_sessions` | Last 5 session stubs | Managed by `useRecentSessions` hook |
 | React `useState` | UI-only state (active tab, quiz phase, chat open) | Page lifetime |
 
 ### useRecentSessions Hook
 
-**File:** `src/app/hooks/useRecentSessions.ts`
+**File:** `src/hooks/useRecentSessions.ts`
 
 Maintains a list of up to 5 recent session stubs. On each `saveSession()` call:
 1. Deduplicates by `session_id`
@@ -193,7 +201,7 @@ Key types shared across all pages:
 
 ```typescript
 type TutoringType = "micro_learning" | "teaching_a_kid" | "advanced";
-type SessionType = "url" | "topic";
+type SessionType = "url" | "topic" | "paste" | "upload";
 
 interface SessionResult {
   session_id: string;
@@ -204,6 +212,8 @@ interface SessionResult {
   notes: string;             // Markdown
   flashcards: Flashcard[];
   quiz: QuizQuestion[];
+  chat_intro: string;        // Persona-adapted greeting shown as first chat bubble
+  errors?: Record<string, string>; // Per-section errors e.g. { flashcards: "..." }
 }
 
 interface Flashcard { front: string; back: string; }
@@ -211,6 +221,18 @@ interface QuizQuestion { question: string; options: string[]; answer_index: numb
 ```
 
 SSE event types mirror the backend stream events: `ProgressEvent`, `CompleteEvent`, `ErrorEvent`, `WarningEvent`.
+
+#### buildProgressSteps
+
+```typescript
+function buildProgressSteps(
+  inputMode: "url" | "topic" | "paste" | "upload",
+  generateFlashcards: boolean,
+  generateQuiz: boolean,
+): string[]
+```
+
+Returns an ordered list of progress messages for the loading page, matching the server-side workflow step order. `buildExpectedSteps` is kept as a legacy alias.
 
 ---
 
