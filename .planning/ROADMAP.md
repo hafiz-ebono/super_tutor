@@ -141,7 +141,7 @@ Plans:
 
 **Milestone Goal:** Transform the study page into an adaptive tutoring experience — a persistent, session-grounded Agno Team that answers questions, runs quizzes, generates inline content, and surfaces focus area suggestions.
 
-- [ ] **Phase 14: Team Foundation** - Coordinator + Explainer with streaming, persistence validation, and session grounding
+- [x] **Phase 14: Team Foundation** - Coordinator + Explainer with streaming, persistence validation, and session grounding (completed 2026-03-14)
 - [ ] **Phase 15: Full Specialist Roster + Guardrails** - Researcher, Content Writer, and topic relevance guardrails
 - [ ] **Phase 16: Frontend Tutor Tab** - 4th study tab with persistent chat, history restore, and intro message
 - [ ] **Phase 17: In-Tutor Quiz Mode** - In-chat MCQ delivery, answer evaluation, and quiz result integration
@@ -237,7 +237,7 @@ Plans:
 | 11. Backend Foundation | v6.0 | 3/3 | Complete | 2026-03-13 |
 | 12. Backend Upload Endpoint | v6.0 | 3/3 | Complete | 2026-03-14 |
 | 13. Frontend Upload UI | v6.0 | 4/4 | Complete | 2026-03-14 |
-| 14. Team Foundation | 1/2 | In Progress|  | - |
+| 14. Team Foundation | 2/2 | Complete   | 2026-03-14 | - |
 | 15. Full Specialist Roster + Guardrails | v7.0 | 0/TBD | Not started | - |
 | 16. Frontend Tutor Tab | v7.0 | 0/TBD | Not started | - |
 | 17. In-Tutor Quiz Mode | v7.0 | 0/TBD | Not started | - |

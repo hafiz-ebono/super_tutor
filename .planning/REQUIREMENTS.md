@@ -10,8 +10,8 @@ Requirements for the Personal Tutor milestone. Continues numbering from v6.0.
 ### Personal Tutor Tab (TUTOR)
 
 - [ ] **TUTOR-01**: User sees a Personal Tutor tab (4th tab) on the study page alongside Notes, Flashcards, and Quiz
-- [ ] **TUTOR-02**: User can type messages to the tutor and receive streaming token-by-token responses
-- [ ] **TUTOR-03**: Tutor conversation history persists across page refreshes (saved to SQLite per session_id via `tutor:{session_id}` namespace)
+- [x] **TUTOR-02**: User can type messages to the tutor and receive streaming token-by-token responses
+- [x] **TUTOR-03**: Tutor conversation history persists across page refreshes (saved to SQLite per session_id via `tutor:{session_id}` namespace)
 - [ ] **TUTOR-04**: Tutor introduces itself and its capabilities when user first opens the tab
 
 ### Agno Team Architecture (TEAM)
@@ -78,8 +78,8 @@ All 23 v7.0 requirements mapped to phases. Updated during roadmap creation (2026
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | TUTOR-01 | Phase 16 | Pending |
-| TUTOR-02 | Phase 14 | Pending |
-| TUTOR-03 | Phase 14 | Pending |
+| TUTOR-02 | Phase 14 | Complete |
+| TUTOR-03 | Phase 14 | Complete |
 | TUTOR-04 | Phase 16 | Pending |
 | TEAM-01 | Phase 14 | Complete |
 | TEAM-02 | Phase 14 | Complete |
