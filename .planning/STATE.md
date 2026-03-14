@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-13 after v6.0 milestone start)
 ## Current Position
 
 Phase: 13 of 13 (Frontend Upload UI)
-Plan: 1 of N complete
-Status: In progress — Phase 13 Plan 01 complete
-Last activity: 2026-03-14 — Completed 13-01: Backend .docx support patch; ALLOWED_EXTENSIONS tuple, .docx SSE test, 121 tests all passing
+Plan: 2 of 3 complete
+Status: In progress — Plan 13-02 done; Plan 13-03 (upload submit/SSE flow) next
+Last activity: 2026-03-14 — Completed 13-02: SessionType extended to 'upload', three-tab create page with file input and 20 MB client-side guard, loading page type-safe for upload inputMode
 
-Progress: [████████████░] 90% (Phase 13 in progress 1/N plans)
+Progress: [████████████░] 92% (Phase 13 in progress 2/3 plans)
 
 ## Performance Metrics
 
@@ -78,6 +78,11 @@ All decisions logged in PROJECT.md Key Decisions table (fully updated after v5.0
 - ALLOWED_EXTENSIONS = ('.pdf', '.docx') as module-level constant after MAX_BYTES; endswith(tuple) form used — no regex
 - .txt chosen as canonical rejected format in test_unsupported_format_returns_400 (not .docx, which is now accepted)
 
+**13-02 decisions:**
+- uploadError and uploadProgressMessage state added in 13-02 (unused until 13-03) to centralise all upload state declarations in one location
+- Focus prompt field confirmed as shared unconditional input — no duplicate added inside Upload section
+- handleFileChange resets e.target.value on oversized file so same file path can be re-selected after correction
+
 Key architectural facts for v6.0:
 - `asyncio.to_thread()` required for all synchronous extraction calls in async FastAPI handlers (pypdf and python-docx are blocking; same pattern as existing workflow.run())
 - `document_extractor.py` must accept `bytes` and return `str` — never touch the filesystem
@@ -105,5 +110,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Completed 13-01-PLAN.md (Backend .docx support: ALLOWED_EXTENSIONS tuple, 6 upload router tests, 121 total passing)
+Stopped at: Completed 13-02-PLAN.md (Frontend upload UI: SessionType='upload', three-tab create page, file input with 20 MB guard, loading page type widened)
 Resume file: None
