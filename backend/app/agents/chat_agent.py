@@ -3,6 +3,7 @@ from agno.db.sqlite import SqliteDb
 from app.agents.guardrails import PROMPT_INJECTION_GUARDRAIL, validate_substantive_output
 from app.agents.model_factory import get_model
 from app.agents.personas import PERSONAS
+from app.config import get_settings
 
 
 def build_chat_agent(tutoring_type: str, notes: str, db: SqliteDb | None = None) -> Agent:
@@ -10,6 +11,8 @@ def build_chat_agent(tutoring_type: str, notes: str, db: SqliteDb | None = None)
     Build a chat agent grounded in the provided session notes.
     A new agent is constructed on every request; conversation history is
     stored in the DB and replayed automatically via add_history_to_context.
+    num_history_runs limits how many past turns are injected into context,
+    bounding token cost on long conversations.
     """
     persona = PERSONAS[tutoring_type]
     return Agent(
@@ -17,6 +20,7 @@ def build_chat_agent(tutoring_type: str, notes: str, db: SqliteDb | None = None)
         model=get_model(),
         db=db,
         add_history_to_context=True,
+        num_history_runs=get_settings().chat_history_window,
         enable_session_summaries=False,
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
         post_hooks=[validate_substantive_output],
