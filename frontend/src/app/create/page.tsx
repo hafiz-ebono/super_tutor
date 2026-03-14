@@ -5,7 +5,7 @@ import Link from "next/link";
 import { TutoringType, SessionRequest } from "@/types/session";
 import { useRecentSessions } from "@/app/hooks/useRecentSessions";
 
-type InputMode = "url" | "topic";
+type InputMode = "url" | "topic" | "upload";
 
 const TUTORING_MODES: { id: TutoringType; label: string; description: string }[] = [
   { id: "micro_learning", label: "Micro Learning", description: "Short, punchy bullets. Just the essentials, fast." },
@@ -44,8 +44,28 @@ function CreateForm() {
   const [pasteText, setPasteText] = useState("");
   const [generateFlashcards, setGenerateFlashcards] = useState(false);
   const [generateQuiz, setGenerateQuiz] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<{ error_kind: string; message: string } | null>(null);
+  const [uploadProgressMessage, setUploadProgressMessage] = useState<string | null>(null);
 
   const { saveSession } = useRecentSessions();
+
+  const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setFileError(null);
+    setUploadError(null);
+    if (!file) { setSelectedFile(null); return; }
+    if (file.size > MAX_FILE_BYTES) {
+      setFileError("File is too large. Maximum file size is 20 MB.");
+      setSelectedFile(null);
+      e.target.value = ""; // reset so same file can be re-selected after correction
+      return;
+    }
+    setSelectedFile(file);
+  }
 
   const errorMessages = errorKind ? ERROR_MESSAGES[errorKind] ?? ERROR_MESSAGES.empty : null;
 
@@ -157,6 +177,15 @@ function CreateForm() {
           >
             Topic description
           </button>
+          <button
+            type="button"
+            onClick={() => { setInputMode("upload"); setUrl(""); setTopicDescription(""); setSelectedFile(null); setFileError(null); setUploadError(null); }}
+            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-colors ${
+              inputMode === "upload" ? "bg-zinc-900 text-white" : "bg-white text-zinc-500 hover:bg-zinc-50"
+            }`}
+          >
+            Upload file
+          </button>
         </div>
 
         {/* URL input */}
@@ -200,6 +229,30 @@ function CreateForm() {
             {topicDescription.length >= 10 && topicDescription.trim().split(/\s+/).length < 3 && (
               <p className="text-xs text-amber-600">
                 Your topic is quite broad — consider adding more detail for better results.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* File upload input */}
+        {inputMode === "upload" && (
+          <div className="flex flex-col gap-2">
+            <label htmlFor="file_upload" className="text-sm font-medium text-zinc-900">
+              Upload a PDF or Word document
+            </label>
+            <input
+              id="file_upload"
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleFileChange}
+              className="w-full text-sm text-zinc-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200 transition-colors cursor-pointer"
+            />
+            {fileError && (
+              <p className="text-xs text-red-500" role="alert">{fileError}</p>
+            )}
+            {selectedFile && !fileError && (
+              <p className="text-xs text-zinc-500">
+                Selected: {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)
               </p>
             )}
           </div>
@@ -286,7 +339,8 @@ function CreateForm() {
             isSubmitting ||
             (pasteText.length > 0 && pasteText.length < 200) ||
             (inputMode === "topic" && !pasteText && topicDescription.length < 10) ||
-            (inputMode === "url" && !pasteText && !url.trim())
+            (inputMode === "url" && !pasteText && !url.trim()) ||
+            (inputMode === "upload" && !selectedFile)
           }
         >
           {isSubmitting ? "Starting..." : "Generate my study session →"}
