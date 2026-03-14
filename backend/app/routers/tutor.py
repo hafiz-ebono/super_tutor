@@ -71,6 +71,7 @@ async def tutor_stream(session_id: str, request: Request, body: TutorStreamReque
         notes=notes,
         tutoring_type=body.tutoring_type,
         db=traces_db,
+        session_topic=source_content[:300],  # First 300 chars — sufficient for guardrail topic context
     )
 
     logger.info(
