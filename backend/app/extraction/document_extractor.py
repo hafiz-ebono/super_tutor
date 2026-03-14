@@ -38,7 +38,7 @@ class DocumentExtractionError(Exception):
         super().__init__(message or error_kind)
 
 
-def extract_document(data: bytes, filename: str) -> str:
+def extract_document(data: bytes, filename: str) -> tuple[str, bool]:
     """
     Extract plain text from PDF or DOCX bytes.
 
@@ -47,7 +47,8 @@ def extract_document(data: bytes, filename: str) -> str:
         filename: Original filename — used for extension-based dispatch.
 
     Returns:
-        Cleaned, possibly-truncated plain text.
+        Tuple of (cleaned_text, was_truncated). was_truncated is True when the
+        document exceeded the configured character limit and was cut short.
 
     Raises:
         DocumentExtractionError: For scanned PDFs, unsupported formats.
@@ -64,9 +65,9 @@ def extract_document(data: bytes, filename: str) -> str:
         )
 
     # Soft truncation before cleaning (truncation marker must survive cleaning)
-    truncated = _soft_truncate(raw)
+    truncated, was_truncated = _soft_truncate(raw)
 
-    return clean_extracted_content(truncated, source_type="document")
+    return clean_extracted_content(truncated, source_type="document"), was_truncated
 
 
 def _extract_pdf(pdf_bytes: bytes) -> str:
@@ -112,11 +113,16 @@ def _extract_docx(docx_bytes: bytes) -> str:
     return "\n\n".join(parts)
 
 
-def _soft_truncate(text: str) -> str:
-    """Truncate text at the nearest paragraph or sentence boundary below the configured limit."""
+def _soft_truncate(text: str) -> tuple[str, bool]:
+    """Truncate text at the nearest paragraph or sentence boundary below the configured limit.
+
+    Returns:
+        Tuple of (text, was_truncated). was_truncated is True only when the text
+        exceeded the limit and was cut.
+    """
     limit = get_settings().document_truncation_limit
     if len(text) <= limit:
-        return text
+        return text, False
 
     # Prefer paragraph boundary
     boundary = text.rfind("\n\n", 0, limit)
@@ -136,4 +142,4 @@ def _soft_truncate(text: str) -> str:
         f"\n\n[Content truncated: document exceeds {limit:,} characters. "
         "Upload a specific chapter or section for full coverage.]"
     )
-    return text[:boundary] + marker
+    return text[:boundary] + marker, True

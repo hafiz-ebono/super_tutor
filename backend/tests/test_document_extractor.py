@@ -101,9 +101,10 @@ class TestPdfExtraction:
         """Text-based PDF should return cleaned plain text."""
         long_enough = "A" * 300
         mock_reader_cls.return_value = self._make_mock_reader([long_enough])
-        result = extract_document(b"fake_pdf", "file.pdf")
+        result, was_truncated = extract_document(b"fake_pdf", "file.pdf")
         assert isinstance(result, str)
         assert len(result) >= 200
+        assert was_truncated is False
 
     @patch("app.extraction.document_extractor.PdfReader")
     def test_scanned_pdf_raises_error(self, mock_reader_cls):
@@ -132,7 +133,7 @@ class TestPdfExtraction:
         reader = MagicMock()
         reader.pages = [page_none, page_text]
         mock_reader_cls.return_value = reader
-        result = extract_document(b"fake_pdf", "file.pdf")
+        result, _ = extract_document(b"fake_pdf", "file.pdf")
         assert "A" * 10 in result  # At least part of the text is present
 
     @patch("app.extraction.document_extractor.PdfReader")
@@ -140,7 +141,7 @@ class TestPdfExtraction:
         """.PDF (uppercase) should be handled the same as .pdf."""
         long_enough = "B" * 300
         mock_reader_cls.return_value = self._make_mock_reader([long_enough])
-        result = extract_document(b"fake_pdf", "file.PDF")
+        result, _ = extract_document(b"fake_pdf", "file.PDF")
         assert isinstance(result, str)
 
     @patch("app.extraction.document_extractor.PdfReader")
@@ -149,7 +150,7 @@ class TestPdfExtraction:
         mock_reader_cls.return_value = self._make_mock_reader(
             ["Page one " * 30, "Page two " * 30]
         )
-        result = extract_document(b"fake_pdf", "file.pdf")
+        result, _ = extract_document(b"fake_pdf", "file.pdf")
         assert "Page one" in result
         assert "Page two" in result
 
@@ -195,7 +196,7 @@ class TestDocxExtraction:
     def test_docx_returns_paragraph_text(self, mock_doc_cls):
         """DOCX extraction must include paragraph text."""
         mock_doc_cls.return_value = self._make_mock_doc(["Para one.", "Para two."])
-        result = extract_document(b"fake_docx", "file.docx")
+        result, _ = extract_document(b"fake_docx", "file.docx")
         assert "Para one" in result
         assert "Para two" in result
 
@@ -206,7 +207,7 @@ class TestDocxExtraction:
             ["Intro paragraph."],
             table_cell_texts=["Cell content here."]
         )
-        result = extract_document(b"fake_docx", "file.docx")
+        result, _ = extract_document(b"fake_docx", "file.docx")
         assert "Intro paragraph" in result
         assert "Cell content here" in result
 
@@ -216,7 +217,7 @@ class TestDocxExtraction:
         mock_doc_cls.return_value = self._make_mock_doc(
             ["Real content.", "", "   ", "More content."]
         )
-        result = extract_document(b"fake_docx", "file.docx")
+        result, _ = extract_document(b"fake_docx", "file.docx")
         assert "Real content" in result
         assert "More content" in result
 
@@ -233,7 +234,7 @@ class TestDocxExtraction:
     def test_docx_case_insensitive_extension(self, mock_doc_cls):
         """.DOCX (uppercase) should be handled the same as .docx."""
         mock_doc_cls.return_value = self._make_mock_doc(["Content."])
-        result = extract_document(b"fake_docx", "file.DOCX")
+        result, _ = extract_document(b"fake_docx", "file.DOCX")
         assert isinstance(result, str)
 
 
@@ -253,9 +254,10 @@ class TestTruncation:
         reader = MagicMock()
         reader.pages = [page]
         mock_reader_cls.return_value = reader
-        result = extract_document(b"fake_pdf", "file.pdf")
+        result, was_truncated = extract_document(b"fake_pdf", "file.pdf")
         assert TRUNCATION_MARKER.strip() in result
         assert len(result) < len(long_text)
+        assert was_truncated is True
 
     @patch("app.extraction.document_extractor.Document")
     def test_docx_text_truncated_at_50000_chars(self, mock_doc_cls):
@@ -271,8 +273,9 @@ class TestTruncation:
         doc.paragraphs = para_mocks
         doc.tables = []
         mock_doc_cls.return_value = doc
-        result = extract_document(b"fake_docx", "file.docx")
+        result, was_truncated = extract_document(b"fake_docx", "file.docx")
         assert TRUNCATION_MARKER.strip() in result
+        assert was_truncated is True
 
     @patch("app.extraction.document_extractor.PdfReader")
     def test_truncation_marker_content_visible(self, mock_reader_cls):
@@ -284,7 +287,7 @@ class TestTruncation:
         reader = MagicMock()
         reader.pages = [page]
         mock_reader_cls.return_value = reader
-        result = extract_document(b"fake_pdf", "file.pdf")
+        result, _ = extract_document(b"fake_pdf", "file.pdf")
         assert "50,000" in result
 
     @patch("app.extraction.document_extractor.PdfReader")
@@ -296,5 +299,6 @@ class TestTruncation:
         reader = MagicMock()
         reader.pages = [page]
         mock_reader_cls.return_value = reader
-        result = extract_document(b"fake_pdf", "file.pdf")
+        result, was_truncated = extract_document(b"fake_pdf", "file.pdf")
         assert "truncated" not in result.lower()
+        assert was_truncated is False

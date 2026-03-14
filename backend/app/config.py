@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     scanned_pdf_threshold: int = 200             # min chars to treat a PDF as text-based
 
     # Chat
-    chat_history_window: int = 6                 # past turns included in context; override with CHAT_HISTORY_WINDOW
+    chat_history_window: int = 20                # past turns included in context; override with CHAT_HISTORY_WINDOW
 
     # CORS
     allowed_origins: List[str] | str = ["http://localhost:3000"]

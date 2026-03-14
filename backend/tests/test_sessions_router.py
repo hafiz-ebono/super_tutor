@@ -173,6 +173,8 @@ def test_get_session_complete(client):
     assert body["source_title"] == "Test Session"
     assert body["notes"] == "## Notes\n- point one"
     assert body["session_id"] == "some-session-id"
+    assert "was_truncated" in body
+    assert body["was_truncated"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -221,11 +223,10 @@ def test_regenerate_flashcards_loads_source_content_from_sqlite(client):
     mock_session.session_data = {"session_state": inner_state}
     mock_workflow = MagicMock()
     mock_workflow.get_session.return_value = mock_session
+    mock_workflow.asave_session = AsyncMock()
 
-    mock_result = MagicMock()
-    mock_result.content = '[{"front": "Q", "back": "A"}]'
-    mock_agent = MagicMock()
-    mock_agent.arun = AsyncMock(return_value=mock_result)
+    async def fake_flashcards_step(step_input, session_state):
+        session_state["flashcards"] = [{"front": "Q", "back": "A"}]
 
     with (
         patch(
@@ -233,7 +234,7 @@ def test_regenerate_flashcards_loads_source_content_from_sqlite(client):
             return_value={"status": "complete", "error_kind": "", "error_message": ""},
         ),
         patch("app.routers.sessions.build_session_workflow", return_value=mock_workflow),
-        patch("app.routers.sessions.build_flashcard_agent", return_value=mock_agent),
+        patch("app.routers.sessions.flashcards_step", side_effect=fake_flashcards_step),
     ):
         response = client.post(
             "/sessions/some-session-id/regenerate/flashcards",

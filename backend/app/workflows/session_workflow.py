@@ -248,9 +248,20 @@ async def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
             f"Notes generation failed — model returned: {notes.strip()!r}. Please try again."
         )
 
+    # Ensure truncation notice is always present in notes when the document was cut.
+    # Models may omit or rephrase the inline marker — append deterministically if missing.
+    was_truncated = bool(data.get("was_truncated", False))
+    if was_truncated and "truncated" not in notes.lower():
+        notes = (
+            notes
+            + "\n\n---\n\n**Note:** This document was truncated due to length. "
+            "Upload a specific chapter or section for complete coverage."
+        )
+
     # Write to session_state — agno persists to SQLite in finally block
     session_state["notes"] = notes
     session_state["tutoring_type"] = tutoring_type
+    session_state["was_truncated"] = was_truncated
     # sources: only set for non-topic sessions — topic sessions have sources set by research_step
     if session_type != "topic":
         session_state["sources"] = []
@@ -518,6 +529,7 @@ async def run_workflow_background(
     source: str = "",        # original filename for upload sessions; "" for others
     generate_flashcards: bool = False,
     generate_quiz: bool = False,
+    was_truncated: bool = False,  # True when upload document exceeded the char limit
 ) -> None:
     """
     Runs the agno workflow and updates session_status on completion.
@@ -555,6 +567,7 @@ async def run_workflow_background(
                 "focus_prompt": focus_prompt,
                 "generate_flashcards": generate_flashcards,
                 "generate_quiz": generate_quiz,
+                "was_truncated": was_truncated,
                 "traces_db": traces_db,
             },
             session_id=session_id,

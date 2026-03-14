@@ -6,18 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from agno.db.sqlite import SqliteDb
+from agno.workflow.types import StepInput
 
 from app.models.session import SessionRequest
 from app.extraction.chain import extract_content, ExtractionError
 from app.workflows.session_workflow import (
     run_workflow_background,
     build_session_workflow,
-    _parse_json_safe,
-    _MAX_FLASHCARDS,
-    _MAX_QUIZ,
+    flashcards_step,
+    quiz_step,
 )
-from app.agents.flashcard_agent import build_flashcard_agent
-from app.agents.quiz_agent import build_quiz_agent
 from app.dependencies import get_traces_db, limiter, ACTIVE_TASKS
 from app.config import get_settings
 from app.utils.session_status import (
@@ -33,11 +31,6 @@ router = APIRouter()
 # ACTIVE_TASKS is the process-wide registry from dependencies.py.
 # It is also used by the lifespan shutdown hook in main.py to drain
 # in-flight tasks before the process exits.
-
-# Process-local cache for completed session data.
-# Sessions are immutable once complete so we can cache them indefinitely.
-# Keyed by session_id; values are the full GET response dicts.
-_SESSION_CACHE: dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -238,11 +231,6 @@ async def get_session(session_id: str, traces_db: SqliteDb = Depends(get_traces_
             },
         )
 
-    # status == "complete" — serve from memory cache to avoid repeated agno SQLite reads
-    if session_id in _SESSION_CACHE:
-        logger.debug("get_session cache hit — session_id=%s", session_id)
-        return _SESSION_CACHE[session_id]
-
     wf = build_session_workflow(session_id=session_id, session_db=traces_db)
     existing = wf.get_session(session_id=session_id)
     if existing is None:
@@ -255,7 +243,7 @@ async def get_session(session_id: str, traces_db: SqliteDb = Depends(get_traces_
 
     state = (existing.session_data or {}).get("session_state", {})
     logger.info("get_session complete — session_id=%s", session_id)
-    result = {
+    return {
         "status": "complete",
         "session_id": session_id,
         "source_title": state.get("title", "Study Session"),
@@ -267,9 +255,8 @@ async def get_session(session_id: str, traces_db: SqliteDb = Depends(get_traces_
         "flashcards": state.get("flashcards", []),
         "quiz": state.get("quiz", []),
         "chat_intro": state.get("chat_intro", ""),
+        "was_truncated": bool(state.get("was_truncated", False)),
     }
-    _SESSION_CACHE[session_id] = result
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +270,9 @@ class RegenerateRequest(BaseModel):
 @router.post("/{session_id}/regenerate/{section}")
 @limiter.limit(get_settings().rate_limit_sessions)
 async def regenerate_section(request: Request, session_id: str, section: str, body: RegenerateRequest, traces_db: SqliteDb = Depends(get_traces_db)):
-    """Generates flashcards or quiz on demand using source_content loaded from SQLite session state."""
+    """Regenerates flashcards or quiz via the same workflow step functions used during initial generation.
+    Results are persisted to SQLite so subsequent GET /sessions/{id} returns up-to-date data.
+    """
     if section not in ("flashcards", "quiz"):
         raise HTTPException(status_code=400, detail="section must be 'flashcards' or 'quiz'")
 
@@ -294,39 +283,38 @@ async def regenerate_section(request: Request, session_id: str, section: str, bo
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
     state = (existing.session_data or {}).get("session_state", {})
-    source_content = state.get("source_content", "")
-    if not source_content:
+    if not state.get("source_content"):
         raise HTTPException(
             status_code=404,
             detail=f"Session '{session_id}' has no source content. Cannot regenerate.",
         )
 
-    input_text = source_content
     logger.info(
         "Generating %s — session_id=%s tutoring_type=%s",
         section, session_id, body.tutoring_type,
     )
 
-    if section == "flashcards":
-        agent = build_flashcard_agent(body.tutoring_type, db=traces_db)
-        result = await agent.arun(input_text)
-        new_items = _parse_json_safe(result.content or "[]", [])[:_MAX_FLASHCARDS]
-        if not new_items:
-            raise HTTPException(status_code=500, detail="Generation returned empty response")
-        logger.info(
-            "Generation complete — session_id=%s section=flashcards count=%d",
-            session_id, len(new_items),
-        )
-        return {"flashcards": new_items}
+    step_input = StepInput(
+        additional_data={
+            "session_id": session_id,
+            "traces_db": traces_db,
+            "tutoring_type": body.tutoring_type,
+        }
+    )
 
+    if section == "flashcards":
+        await flashcards_step(step_input, state)
+        new_items = state.get("flashcards", [])
     else:
-        agent = build_quiz_agent(body.tutoring_type, db=traces_db)
-        result = await agent.arun(input_text)
-        new_items = _parse_json_safe(result.content or "[]", [])[:_MAX_QUIZ]
-        if not new_items:
-            raise HTTPException(status_code=500, detail="Generation returned empty response")
-        logger.info(
-            "Generation complete — session_id=%s section=quiz count=%d",
-            session_id, len(new_items),
-        )
-        return {"quiz": new_items}
+        await quiz_step(step_input, state)
+        new_items = state.get("quiz", [])
+
+    if not new_items:
+        raise HTTPException(status_code=500, detail="Generation returned empty response")
+
+    await wf.asave_session(session=existing)
+    logger.info(
+        "Generation complete — session_id=%s section=%s count=%d",
+        session_id, section, len(new_items),
+    )
+    return {section: new_items}

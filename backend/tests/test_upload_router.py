@@ -59,7 +59,7 @@ def parse_sse_events(lines):
 # ---------------------------------------------------------------------------
 
 
-@patch("app.routers.upload.extract_document", return_value="Extracted study content " * 20)
+@patch("app.routers.upload.extract_document", return_value=("Extracted study content " * 20, False))
 @patch("app.routers.upload.run_workflow_background", new_callable=AsyncMock)
 @patch("app.routers.upload.create_session_status")
 def test_valid_pdf_produces_sse_stream(mock_create_status, mock_workflow, mock_extract, client):
@@ -102,7 +102,7 @@ def test_valid_pdf_produces_sse_stream(mock_create_status, mock_workflow, mock_e
 # ---------------------------------------------------------------------------
 
 
-@patch("app.routers.upload.extract_document", return_value="Extracted study content " * 20)
+@patch("app.routers.upload.extract_document", return_value=("Extracted study content " * 20, False))
 @patch("app.routers.upload.run_workflow_background", new_callable=AsyncMock)
 @patch("app.routers.upload.create_session_status")
 def test_valid_docx_produces_sse_stream(mock_create_status, mock_workflow, mock_extract, client):

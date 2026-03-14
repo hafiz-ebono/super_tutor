@@ -101,7 +101,7 @@ async def create_upload_session(
 
     # Step 4: Extract document (blocking — runs in thread; raises HTTP 422 for scanned PDFs)
     try:
-        extracted: str = await asyncio.to_thread(extract_document, file_bytes, filename)
+        extracted, was_truncated = await asyncio.to_thread(extract_document, file_bytes, filename)
     except DocumentExtractionError as e:
         logger.warning(
             "Document extraction failed before SSE open — filename=%s error_kind=%s message=%s",
@@ -143,6 +143,7 @@ async def create_upload_session(
                 source=filename,
                 generate_flashcards=generate_flashcards,
                 generate_quiz=generate_quiz,
+                was_truncated=was_truncated,
                 traces_db=traces_db,
             )
 

@@ -455,6 +455,84 @@ class TestNotesStepSessionStateWrites:
 
 
 # ---------------------------------------------------------------------------
+# notes_step — was_truncated flag
+# ---------------------------------------------------------------------------
+
+class TestNotesStepWasTruncated:
+    """notes_step must write was_truncated to session_state and guarantee notice in notes."""
+
+    async def test_sets_was_truncated_false_by_default(self):
+        """notes_step must write was_truncated=False when not passed in additional_data."""
+        source_content = "T" * 300
+        session_state: dict = {"session_type": "url"}
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "source_content": source_content,
+        })
+        mock_agent = _make_async_agent(GOOD_NOTES)
+
+        with patch("app.workflows.session_workflow.build_notes_agent", return_value=mock_agent):
+            from app.workflows.session_workflow import notes_step
+            await notes_step(step_input, session_state)
+
+        assert session_state.get("was_truncated") is False
+
+    async def test_sets_was_truncated_true_when_passed(self):
+        """notes_step must write was_truncated=True when additional_data carries the flag."""
+        source_content = "T" * 300
+        session_state: dict = {"session_type": "upload"}
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "source_content": source_content,
+            "was_truncated": True,
+        })
+        mock_agent = _make_async_agent(GOOD_NOTES)
+
+        with patch("app.workflows.session_workflow.build_notes_agent", return_value=mock_agent):
+            from app.workflows.session_workflow import notes_step
+            await notes_step(step_input, session_state)
+
+        assert session_state.get("was_truncated") is True
+
+    async def test_appends_truncation_notice_when_model_drops_it(self):
+        """notes_step must append truncation notice when was_truncated=True and model omits it."""
+        source_content = "T" * 300
+        session_state: dict = {"session_type": "upload"}
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "source_content": source_content,
+            "was_truncated": True,
+        })
+        # Model returns notes with no mention of truncation
+        mock_agent = _make_async_agent(GOOD_NOTES)
+
+        with patch("app.workflows.session_workflow.build_notes_agent", return_value=mock_agent):
+            from app.workflows.session_workflow import notes_step
+            await notes_step(step_input, session_state)
+
+        assert "truncated" in session_state.get("notes", "").lower()
+
+    async def test_does_not_duplicate_notice_when_model_includes_it(self):
+        """notes_step must not append a second notice when model already mentions truncation."""
+        source_content = "T" * 300
+        session_state: dict = {"session_type": "upload"}
+        step_input = _make_step_input({
+            "tutoring_type": "advanced",
+            "source_content": source_content,
+            "was_truncated": True,
+        })
+        notes_with_mention = GOOD_NOTES + "\n\nNote: content was truncated."
+        mock_agent = _make_async_agent(notes_with_mention)
+
+        with patch("app.workflows.session_workflow.build_notes_agent", return_value=mock_agent):
+            from app.workflows.session_workflow import notes_step
+            await notes_step(step_input, session_state)
+
+        notes = session_state.get("notes", "")
+        assert notes.lower().count("truncated") == 1
+
+
+# ---------------------------------------------------------------------------
 # flashcards_step — happy path and non-fatal error handling
 # ---------------------------------------------------------------------------
 
