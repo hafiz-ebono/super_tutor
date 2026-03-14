@@ -63,6 +63,7 @@ async def lifespan(app: FastAPI):
 from app.routers import sessions
 from app.routers import chat
 from app.routers import upload as upload_router
+from app.routers import tutor as tutor_router
 
 app = FastAPI(
     title="Super Tutor API",
@@ -87,6 +88,7 @@ app.add_middleware(
 app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(upload_router.router, prefix="/sessions", tags=["sessions"])
+app.include_router(tutor_router.router, prefix="/tutor", tags=["tutor"])
 
 
 @app.get("/health")
@@ -138,6 +140,8 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
             build_research_agent(db=traces_db),
         ],
         workflows=[session_workflow],
+        # TutorTeam (Phase 14+) is not registered here — Teams are traced via db= injection
+        # at request time. Per-request Team instances appear in AgentOS via shared traces_db.
         base_app=fastapi_app,
         db=traces_db,
         tracing=True,
