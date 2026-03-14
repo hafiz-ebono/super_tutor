@@ -142,6 +142,10 @@ async def _run_session_pipeline(
             session_id, "failed", "workflow_error",
             "An unexpected error occurred. Please try again.",
         )
+    except BaseException:
+        # CancelledError from server shutdown — mark failed before propagating.
+        update_session_status(session_id, "failed", "workflow_error", "Task was cancelled")
+        raise
 
 
 # ---------------------------------------------------------------------------

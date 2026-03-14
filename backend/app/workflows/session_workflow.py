@@ -10,7 +10,6 @@ the async pipeline task in sessions.py after content extraction.
 """
 import json
 import logging
-import os
 import re
 import time
 
@@ -601,3 +600,8 @@ async def run_workflow_background(
     except Exception as e:
         logger.error("Workflow failed — session_id=%s", session_id, exc_info=True)
         update_session_status(session_id, "failed", "workflow_error", str(e))
+    except BaseException:
+        # CancelledError (e.g. server shutdown) is a BaseException, not Exception.
+        # Update status before re-raising so the session doesn't stay stuck in 'pending'.
+        update_session_status(session_id, "failed", "workflow_error", "Task was cancelled")
+        raise

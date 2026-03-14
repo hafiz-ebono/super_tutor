@@ -33,6 +33,7 @@ export interface SessionResult {
   flashcards: Flashcard[];
   quiz: QuizQuestion[];
   chat_intro: string; // persona-adapted greeting shown as first chat bubble
+  was_truncated: boolean; // true when the source document exceeded the char limit and was cut
   errors?: Record<string, string>; // per-section errors e.g. { flashcards: "...", quiz: "..." }
 }
 
