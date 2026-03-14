@@ -96,16 +96,57 @@ def test_valid_pdf_produces_sse_stream(mock_create_status, mock_workflow, mock_e
 
 
 # ---------------------------------------------------------------------------
-# TEST 2 — Non-PDF file returns HTTP 400 before SSE opens
+# TEST 2 — Valid .docx file produces SSE stream with required events
 # ---------------------------------------------------------------------------
 
 
-def test_non_pdf_returns_400(client):
-    """POST /sessions/upload with a .docx file returns HTTP 400 with error_kind='unsupported_format'."""
-    docx_bytes = b"PK\x03\x04"  # DOCX magic bytes
-    response = client.post(
+@patch("app.routers.upload.extract_document", return_value="Extracted study content " * 20)
+@patch("app.routers.upload.run_workflow_background", new_callable=AsyncMock)
+@patch("app.routers.upload.create_session_status")
+def test_valid_docx_produces_sse_stream(mock_create_status, mock_workflow, mock_extract, client):
+    """POST /sessions/upload with a valid .docx returns a 200 SSE stream with progress and complete events."""
+    docx_bytes = b"PK\x03\x04"
+    with client.stream(
+        "POST",
         "/sessions/upload",
         files={"file": ("lecture.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        data={"tutoring_type": "advanced"},
+    ) as response:
+        assert response.status_code == 200
+        lines = list(response.iter_lines())
+
+    events = parse_sse_events(lines)
+    messages = [
+        e["data"].get("message", "")
+        for e in events
+        if isinstance(e["data"], dict)
+    ]
+
+    # Must include a progress event with "Reading your file..." message
+    assert any("Reading your file" in m for m in messages), (
+        f"Expected 'Reading your file...' in SSE messages; got: {messages}"
+    )
+
+    # Must include exactly one 'complete' event with session_id
+    complete_events = [e for e in events if e["event"] == "complete"]
+    assert len(complete_events) == 1, (
+        f"Expected exactly 1 'complete' event; got: {complete_events}"
+    )
+    assert "session_id" in complete_events[0]["data"], (
+        f"'complete' event must carry session_id; got: {complete_events[0]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TEST 3 — Unsupported file format returns HTTP 400 before SSE opens
+# ---------------------------------------------------------------------------
+
+
+def test_unsupported_format_returns_400(client):
+    """POST /sessions/upload with a .txt file returns HTTP 400 with error_kind='unsupported_format'."""
+    response = client.post(
+        "/sessions/upload",
+        files={"file": ("notes.txt", b"plain text content", "text/plain")},
         data={"tutoring_type": "advanced"},
     )
     assert response.status_code == 400
@@ -114,7 +155,7 @@ def test_non_pdf_returns_400(client):
 
 
 # ---------------------------------------------------------------------------
-# TEST 3 — Scanned PDF returns HTTP 422 with error_kind="scanned_pdf"
+# TEST 4 — Scanned PDF returns HTTP 422 with error_kind="scanned_pdf"
 # ---------------------------------------------------------------------------
 
 
@@ -139,7 +180,7 @@ def test_scanned_pdf_returns_422(mock_extract, client):
 
 
 # ---------------------------------------------------------------------------
-# TEST 4 — Oversized file returns HTTP 413
+# TEST 5 — Oversized file returns HTTP 413
 # ---------------------------------------------------------------------------
 
 
