@@ -8,7 +8,6 @@ save_session() automatically persists session data to SQLite.
 Background execution is handled by run_workflow_background(), called from
 the async pipeline task in sessions.py after content extraction.
 """
-import asyncio
 import json
 import logging
 import os
@@ -33,24 +32,6 @@ from app.agents.research_agent import build_research_agent
 from app.config import get_settings
 
 logger = logging.getLogger("super_tutor.workflow")
-
-
-# ---------------------------------------------------------------------------
-# Traces DB singleton (single db for agent traces + workflow session state)
-# ---------------------------------------------------------------------------
-
-def _get_traces_db() -> SqliteDb:
-    """Lazy singleton for the shared traces db used by both AgentOS and workflows."""
-    if not hasattr(_get_traces_db, "_instance"):
-        settings = get_settings()
-        db_dir = os.path.dirname(settings.trace_db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-        _get_traces_db._instance = SqliteDb(
-            db_file=settings.trace_db_path,
-            id="super_tutor_traces",
-        )
-    return _get_traces_db._instance
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +78,7 @@ def _is_valid_title(title: str) -> bool:
     return True
 
 
-def _generate_title(text: str, fallback: str = "", db: SqliteDb | None = None) -> str:
+async def _generate_title(text: str, fallback: str = "", db: SqliteDb | None = None) -> str:
     """Ask the AI for a concise 3-5 word title. Falls back to fallback (truncated) or _extract_title on failure."""
     agent = Agent(
         model=get_model(),
@@ -109,7 +90,7 @@ def _generate_title(text: str, fallback: str = "", db: SqliteDb | None = None) -
     )
     try:
         logger.debug("Title generation start")
-        result = agent.run(text[:800])
+        result = await agent.arun(text[:800])
         title = (result.content or "").strip().strip('"').strip("'")
         if title and _is_valid_title(title):
             logger.debug("Title generation done — title=%r", title)
@@ -136,13 +117,11 @@ def _parse_json_safe(raw: str, fallback: list) -> list:
 # research_step executor
 # ---------------------------------------------------------------------------
 
-def research_step(step_input: StepInput, session_state: dict) -> StepOutput:
+async def research_step(step_input: StepInput, session_state: dict) -> StepOutput:
     """
     Runs ResearchAgent for topic-mode sessions.
     Writes source_content and sources to session_state.
     Fatal: raises RuntimeError on any failure.
-
-    IMPORTANT: This function runs inside asyncio.to_thread — do NOT use await here.
     """
     data = step_input.additional_data or {}
 
@@ -155,7 +134,7 @@ def research_step(step_input: StepInput, session_state: dict) -> StepOutput:
     logger.info("research step start — topic=%.80s", topic_description, extra={"session_id": session_id, "step": "research"})
     _t = time.perf_counter()
     try:
-        result = agent.run(topic_description)
+        result = await agent.arun(topic_description)
     except InputCheckError as e:
         logger.warning("Prompt injection blocked in research_step — trigger=%s", e.check_trigger)
         raise RuntimeError(
@@ -203,14 +182,12 @@ def research_step(step_input: StepInput, session_state: dict) -> StepOutput:
 # notes_step executor
 # ---------------------------------------------------------------------------
 
-def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
+async def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
     """
-    Synchronous step executor called by agno inside Workflow._execute().
+    Async step executor called by agno inside Workflow._execute().
     The parameter name 'session_state' is detected by agno via inspection
     (agno/workflow/step.py _function_has_session_state_param). Mutations to
     this dict are persisted to SQLite by save_session() in the finally block.
-
-    IMPORTANT: This function runs inside asyncio.to_thread — do NOT use await here.
     """
     data = step_input.additional_data or {}
 
@@ -250,7 +227,7 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
     logger.info("notes step start — tutoring_type=%s", tutoring_type, extra={"session_id": session_id, "step": "notes"})
     _t = time.perf_counter()
     try:
-        notes_result = notes_agent.run(input_text)
+        notes_result = await notes_agent.arun(input_text)
     except InputCheckError as e:
         logger.warning("Prompt injection blocked in notes_step — trigger=%s", e.check_trigger)
         raise RuntimeError(
@@ -287,13 +264,11 @@ def notes_step(step_input: StepInput, session_state: dict) -> StepOutput:
 # flashcards_step executor
 # ---------------------------------------------------------------------------
 
-def flashcards_step(step_input: StepInput, session_state: dict) -> StepOutput:
+async def flashcards_step(step_input: StepInput, session_state: dict) -> StepOutput:
     """
     Generates flashcards from source_content in session_state.
     Non-fatal: failures write to session_state["errors"]["flashcards"] and return empty list.
     Agno injects session_state by parameter name.
-
-    IMPORTANT: This function runs inside asyncio.to_thread — do NOT use await here.
     """
     data = step_input.additional_data or {}
     session_id = data.get("session_id", "")
@@ -310,7 +285,7 @@ def flashcards_step(step_input: StepInput, session_state: dict) -> StepOutput:
             raise RuntimeError("No source_content in session_state for flashcards_step")
 
         agent = build_flashcard_agent(tutoring_type=tutoring_type, db=traces_db)
-        result = agent.run(source_content)
+        result = await agent.arun(source_content)
 
         if not result or not result.content:
             raise RuntimeError("FlashcardAgent returned empty output")
@@ -346,13 +321,11 @@ def flashcards_step(step_input: StepInput, session_state: dict) -> StepOutput:
 # quiz_step executor
 # ---------------------------------------------------------------------------
 
-def quiz_step(step_input: StepInput, session_state: dict) -> StepOutput:
+async def quiz_step(step_input: StepInput, session_state: dict) -> StepOutput:
     """
     Generates quiz questions from source_content in session_state.
     Non-fatal: failures write to session_state["errors"]["quiz"] and return empty list.
     Agno injects session_state by parameter name.
-
-    IMPORTANT: This function runs inside asyncio.to_thread — do NOT use await here.
     """
     data = step_input.additional_data or {}
     session_id = data.get("session_id", "")
@@ -369,7 +342,7 @@ def quiz_step(step_input: StepInput, session_state: dict) -> StepOutput:
             raise RuntimeError("No source_content in session_state for quiz_step")
 
         agent = build_quiz_agent(tutoring_type=tutoring_type, db=traces_db)
-        result = agent.run(source_content)
+        result = await agent.arun(source_content)
 
         if not result or not result.content:
             raise RuntimeError("QuizAgent returned empty output")
@@ -405,13 +378,11 @@ def quiz_step(step_input: StepInput, session_state: dict) -> StepOutput:
 # title_step executor
 # ---------------------------------------------------------------------------
 
-def title_step(step_input: StepInput, session_state: dict) -> StepOutput:
+async def title_step(step_input: StepInput, session_state: dict) -> StepOutput:
     """
     Generates a short session title (3-5 words).
     Non-fatal: falls back to _extract_title(notes) on AI failure, then to a generic string.
     Agno injects session_state by parameter name.
-
-    IMPORTANT: This function runs inside asyncio.to_thread — do NOT use await here.
     """
     data = step_input.additional_data or {}
     session_id = data.get("session_id", "")
@@ -422,7 +393,7 @@ def title_step(step_input: StepInput, session_state: dict) -> StepOutput:
     logger.info("title step start", extra={"session_id": session_id, "step": "title"})
 
     try:
-        title = _generate_title(source_content or notes, db=traces_db)
+        title = await _generate_title(source_content or notes, db=traces_db)
         if not title or len(title.strip()) < 3:
             raise RuntimeError("Title too short")
     except Exception as e:
@@ -536,14 +507,14 @@ async def run_workflow_background(
     source_content: str,     # pre-extracted content; "" for topic sessions
     topic_description: str,  # raw topic string; "" for url/paste/upload
     tutoring_type: str,
+    traces_db: SqliteDb,
     focus_prompt: str = "",
     source: str = "",        # original filename for upload sessions; "" for others
     generate_flashcards: bool = False,
     generate_quiz: bool = False,
-    traces_db: SqliteDb | None = None,
 ) -> None:
     """
-    Runs the agno workflow in a thread and updates session_status on completion.
+    Runs the agno workflow and updates session_status on completion.
     Called from the background pipeline task in sessions.py after content extraction.
 
     IMPORTANT: This is called from asyncio.create_task() — never re-raise here.
@@ -560,15 +531,14 @@ async def run_workflow_background(
 
     workflow = build_session_workflow(
         session_id=session_id,
-        session_db=traces_db or _get_traces_db(),
+        session_db=traces_db,
         session_type=session_type,
         generate_flashcards=generate_flashcards,
         generate_quiz=generate_quiz,
     )
 
     try:
-        await asyncio.to_thread(
-            workflow.run,
+        await workflow.arun(
             additional_data={
                 "session_id": session_id,
                 "session_type": session_type,

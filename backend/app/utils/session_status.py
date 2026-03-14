@@ -10,7 +10,7 @@ Can be swapped for Redis/Postgres without changing the interface.
 import logging
 import os
 import sqlite3
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from app.config import get_settings
 
@@ -23,7 +23,11 @@ def _db_path() -> str:
 
 def _get_conn(path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=10, check_same_thread=False)
+    # WAL mode: readers and writers can proceed concurrently without blocking each other.
+    conn.execute("PRAGMA journal_mode=WAL")
+    # busy_timeout: retry for up to 5 s before raising OperationalError on lock contention.
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS session_status (
             session_id   TEXT PRIMARY KEY,
@@ -37,11 +41,8 @@ def _get_conn(path: str) -> sqlite3.Connection:
     return conn
 
 
-_IST = timezone(timedelta(hours=5, minutes=30))
-
-
 def _now() -> str:
-    return datetime.now(_IST).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def create_session_status(session_id: str) -> None:
@@ -76,6 +77,29 @@ def update_session_status(
         "Status updated — session_id=%s status=%s error_kind=%s",
         session_id, status, error_kind or "-",
     )
+
+
+def mark_stale_sessions_failed(stale_after_seconds: int = 3700) -> int:
+    """
+    Mark any session that has been 'pending' for longer than stale_after_seconds as 'failed'.
+    Called at app startup to clean up sessions orphaned by a previous crash.
+    Returns the number of sessions updated.
+    """
+    path = _db_path()
+    if not os.path.exists(path):
+        return 0
+    cutoff = datetime.now(timezone.utc).timestamp() - stale_after_seconds
+    with _get_conn(path) as conn:
+        cursor = conn.execute(
+            "UPDATE session_status SET status='failed', error_kind='timeout',"
+            " error_message='Session timed out — server may have restarted.', updated_at=?"
+            " WHERE status='pending' AND created_at < ?",
+            (_now(), datetime.fromtimestamp(cutoff, tz=timezone.utc).isoformat()),
+        )
+        count = cursor.rowcount
+    if count:
+        logger.warning("Startup cleanup: marked %d stale pending session(s) as failed", count)
+    return count
 
 
 def get_session_status(session_id: str) -> dict | None:

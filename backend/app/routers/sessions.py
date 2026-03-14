@@ -2,7 +2,7 @@ import asyncio
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from agno.db.sqlite import SqliteDb
@@ -16,6 +16,7 @@ from app.workflows.session_workflow import (
 )
 from app.agents.flashcard_agent import build_flashcard_agent
 from app.agents.quiz_agent import build_quiz_agent
+from app.dependencies import get_traces_db, limiter, ACTIVE_TASKS
 from app.config import get_settings
 from app.utils.session_status import (
     create_session_status,
@@ -27,24 +28,9 @@ logger = logging.getLogger("super_tutor.sessions")
 
 router = APIRouter()
 
-# Keep strong references to running tasks so the GC cannot collect them
-# before they complete. Tasks remove themselves via add_done_callback.
-_ACTIVE_TASKS: set[asyncio.Task] = set()
-
-
-# ---------------------------------------------------------------------------
-# Traces DB singleton
-# ---------------------------------------------------------------------------
-
-def _get_traces_db() -> SqliteDb:
-    """Lazy singleton for the shared trace db — avoids circular import from main.py."""
-    if not hasattr(_get_traces_db, "_instance"):
-        settings = get_settings()
-        _get_traces_db._instance = SqliteDb(
-            db_file=settings.trace_db_path,
-            id="super_tutor_traces",
-        )
-    return _get_traces_db._instance
+# ACTIVE_TASKS is the process-wide registry from dependencies.py.
+# It is also used by the lifespan shutdown hook in main.py to drain
+# in-flight tasks before the process exits.
 
 
 # ---------------------------------------------------------------------------
@@ -163,11 +149,19 @@ async def _run_session_pipeline(
 # ---------------------------------------------------------------------------
 
 @router.post("")
-async def create_session(request: SessionRequest):
+@limiter.limit(get_settings().rate_limit_sessions)
+async def create_session(http_request: Request, request: SessionRequest, traces_db: SqliteDb = Depends(get_traces_db)):
     """
     Creates a session and starts the AI workflow as a background task.
     Returns session_id immediately. Client polls GET /sessions/{session_id}.
     """
+    settings = get_settings()
+    if len(ACTIVE_TASKS) >= settings.max_concurrent_sessions:
+        raise HTTPException(
+            status_code=429,
+            detail="Server is at capacity. Please try again in a moment.",
+        )
+
     logger.debug(
         "create_session called — tutoring_type=%s has_url=%s has_paste=%s has_topic=%s",
         request.tutoring_type,
@@ -194,10 +188,10 @@ async def create_session(request: SessionRequest):
     create_session_status(session_id)
 
     task = asyncio.create_task(
-        _run_session_pipeline(session_id, params, _get_traces_db())
+        asyncio.wait_for(_run_session_pipeline(session_id, params, traces_db), timeout=3600)
     )
-    _ACTIVE_TASKS.add(task)
-    task.add_done_callback(_ACTIVE_TASKS.discard)
+    ACTIVE_TASKS.add(task)
+    task.add_done_callback(ACTIVE_TASKS.discard)
 
     logger.debug("Background task dispatched — session_id=%s", session_id)
     return {"session_id": session_id}
@@ -208,7 +202,7 @@ async def create_session(request: SessionRequest):
 # ---------------------------------------------------------------------------
 
 @router.get("/{session_id}")
-async def get_session(session_id: str):
+async def get_session(session_id: str, traces_db: SqliteDb = Depends(get_traces_db)):
     """
     Poll endpoint. Returns one of:
       { "status": "pending" }
@@ -238,7 +232,7 @@ async def get_session(session_id: str):
         )
 
     # status == "complete" — read session data from agno's SQLite (traces db)
-    wf = build_session_workflow(session_id=session_id, session_db=_get_traces_db())
+    wf = build_session_workflow(session_id=session_id, session_db=traces_db)
     existing = wf.get_session(session_id=session_id)
     if existing is None:
         logger.error(
@@ -274,14 +268,15 @@ class RegenerateRequest(BaseModel):
 
 
 @router.post("/{session_id}/regenerate/{section}")
-async def regenerate_section(session_id: str, section: str, body: RegenerateRequest):
+@limiter.limit(get_settings().rate_limit_sessions)
+async def regenerate_section(http_request: Request, session_id: str, section: str, body: RegenerateRequest, traces_db: SqliteDb = Depends(get_traces_db)):
     """Generates flashcards or quiz on demand using source_content loaded from SQLite session state."""
     if section not in ("flashcards", "quiz"):
         raise HTTPException(status_code=400, detail="section must be 'flashcards' or 'quiz'")
 
     _guard_session(session_id)
 
-    wf = build_session_workflow(session_id=session_id, session_db=_get_traces_db())
+    wf = build_session_workflow(session_id=session_id, session_db=traces_db)
     existing = wf.get_session(session_id=session_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
@@ -300,8 +295,8 @@ async def regenerate_section(session_id: str, section: str, body: RegenerateRequ
     )
 
     if section == "flashcards":
-        agent = build_flashcard_agent(body.tutoring_type, db=_get_traces_db())
-        result = await asyncio.to_thread(agent.run, input_text)
+        agent = build_flashcard_agent(body.tutoring_type, db=traces_db)
+        result = await agent.arun(input_text)
         new_items = _parse_json_safe(result.content or "[]", [])
         if not new_items:
             raise HTTPException(status_code=500, detail="Generation returned empty response")
@@ -312,8 +307,8 @@ async def regenerate_section(session_id: str, section: str, body: RegenerateRequ
         return {"flashcards": new_items}
 
     else:
-        agent = build_quiz_agent(body.tutoring_type, db=_get_traces_db())
-        result = await asyncio.to_thread(agent.run, input_text)
+        agent = build_quiz_agent(body.tutoring_type, db=traces_db)
+        result = await agent.arun(input_text)
         new_items = _parse_json_safe(result.content or "[]", [])
         if not new_items:
             raise HTTPException(status_code=500, detail="Generation returned empty response")

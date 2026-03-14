@@ -1,4 +1,5 @@
 agno>=2.5.7
+slowapi>=0.1.9
 sqlalchemy>=2.0.0
 fastapi>=0.115.0
 sse-starlette>=3.2.0

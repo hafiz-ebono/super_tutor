@@ -2,35 +2,23 @@ import json
 import logging
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
+from agno.db.sqlite import SqliteDb
 
 from app.models.chat import ChatStreamRequest
 from app.agents.chat_agent import build_chat_agent
+from app.dependencies import get_traces_db, limiter
 from app.config import get_settings
 from app.workflows.session_workflow import build_session_workflow
-from agno.db.sqlite import SqliteDb
 
 logger = logging.getLogger("super_tutor.chat")
 router = APIRouter()
 
 
-def _get_traces_db() -> SqliteDb:
-    """Return the shared trace db instance, creating it if needed (lazy singleton).
-    Uses the same db_file path and id='super_tutor_traces' as main.py and sessions.py
-    so all three SqliteDb objects write to the same SQLite file and table.
-    """
-    if not hasattr(_get_traces_db, "_instance"):
-        settings = get_settings()
-        _get_traces_db._instance = SqliteDb(
-            db_file=settings.trace_db_path,
-            id="super_tutor_traces",
-        )
-    return _get_traces_db._instance
-
-
 @router.post("/stream")
-async def chat_stream(request: ChatStreamRequest):
+@limiter.limit(get_settings().rate_limit_chat)
+async def chat_stream(http_request: Request, request: ChatStreamRequest, traces_db: SqliteDb = Depends(get_traces_db)):
     """
     Accept: JSON body with message, tutoring_type, history (list of {role, content}), session_id.
     Notes are loaded from SQLite session state via session_id (not accepted in the request body).
@@ -45,7 +33,7 @@ async def chat_stream(request: ChatStreamRequest):
     """
     # Load notes from SQLite session state — authoritative source, not client-supplied.
     try:
-        wf = build_session_workflow(session_id=request.session_id, session_db=_get_traces_db())
+        wf = build_session_workflow(session_id=request.session_id, session_db=traces_db)
         session = wf.get_session(session_id=request.session_id)
     except Exception as e:
         logger.error("Failed to load session for chat — session_id=%s error=%s", request.session_id, e, exc_info=True)
@@ -75,7 +63,7 @@ async def chat_stream(request: ChatStreamRequest):
         else f"chat:{request.session_id}"
     )
 
-    agent = build_chat_agent(request.tutoring_type, notes, db=_get_traces_db())
+    agent = build_chat_agent(request.tutoring_type, notes, db=traces_db)
 
     logger.info(
         "Chat stream start",

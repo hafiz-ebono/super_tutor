@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     trace_db_path: str = "tmp/super_tutor_traces.db"  # AgentOS traces + workflow session state
     status_db_path: str = "tmp/session_status.db"     # session lifecycle status (pending/complete/failed)
 
+    # Concurrency limits
+    max_concurrent_sessions: int = 20   # max background AI tasks running at once (returns 429 when exceeded)
+    rate_limit_sessions: str = "20/minute"   # per-IP limit for POST /sessions
+    rate_limit_chat: str = "60/minute"       # per-IP limit for POST /chat/stream
+    rate_limit_upload: str = "10/minute"     # per-IP limit for POST /sessions/upload
+
     # CORS
     allowed_origins: List[str] | str = ["http://localhost:3000"]
 

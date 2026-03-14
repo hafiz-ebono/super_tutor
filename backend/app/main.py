@@ -1,13 +1,18 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 load_dotenv()  # Export .env vars into os.environ before any tool/client constructors run
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.utils.logging import configure_logging
 from app.config import get_settings
+from app.dependencies import limiter, ACTIVE_TASKS
 
 configure_logging()
 
@@ -15,6 +20,18 @@ logger = logging.getLogger("super_tutor.main")
 
 # Module-level settings used by CORS middleware (evaluated before lifespan runs)
 settings = get_settings()
+
+# Rate limiter imported from dependencies.py — shared across all routers.
+
+
+from agno.db.sqlite import SqliteDb
+
+# Single shared SqliteDb instance for the entire process lifetime.
+# Stored on app.state so routers access it via Depends(get_traces_db).
+_traces_db = SqliteDb(
+    db_file=settings.trace_db_path,
+    id="super_tutor_traces",
+)
 
 
 @asynccontextmanager
@@ -25,7 +42,21 @@ async def lifespan(app: FastAPI):
         settings.agent_model,
         settings.allowed_origins,
     )
+    app.state.traces_db = _traces_db
+    # Clean up sessions that were left pending by a previous crash
+    from app.utils.session_status import mark_stale_sessions_failed
+    mark_stale_sessions_failed()
     yield
+    # Graceful shutdown: wait up to 60s for in-flight background tasks to finish.
+    # Any task still running after the timeout is cancelled so the process can exit cleanly.
+    if ACTIVE_TASKS:
+        logger.info("Shutdown: waiting for %d active task(s) to complete...", len(ACTIVE_TASKS))
+        _, pending = await asyncio.wait(ACTIVE_TASKS, timeout=60)
+        for task in pending:
+            logger.warning("Shutdown: cancelling task that did not finish in time — %s", task.get_name())
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
     logger.info("Super Tutor API shutting down")
 
 
@@ -39,6 +70,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Attach limiter to app state so @limiter.limit decorators can find it
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 _control_plane_origins = ["https://os.agno.com", "https://app.agno.com", "http://localhost:8000"]
 
@@ -59,7 +94,6 @@ async def health():
     return {"status": "ok"}
 
 
-from agno.db.sqlite import SqliteDb
 from agno.os import AgentOS
 from app.agents.notes_agent import build_notes_agent
 from app.agents.chat_agent import build_chat_agent
@@ -87,10 +121,7 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
     AgentOS playground. This representative instance (all steps enabled) is
     for UI visibility only — per-request instances are created inside routers.
     """
-    traces_db = SqliteDb(
-        db_file=settings.trace_db_path,
-        id="super_tutor_traces",
-    )
+    traces_db = _traces_db  # reuse the single shared instance
     session_workflow = build_session_workflow(
         session_id="playground",
         session_db=traces_db,  # use traces_db so this placeholder appears in AgentOS "Workflows"

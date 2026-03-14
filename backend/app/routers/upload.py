@@ -13,20 +13,20 @@ import logging
 import uuid
 from typing import AsyncGenerator, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sse_starlette.sse import EventSourceResponse
+from agno.db.sqlite import SqliteDb
 
 from app.extraction.document_extractor import DocumentExtractionError, extract_document
 from app.utils.session_status import create_session_status
-from app.workflows.session_workflow import _get_traces_db, run_workflow_background
+from app.workflows.session_workflow import run_workflow_background
+from app.dependencies import get_traces_db, limiter, ACTIVE_TASKS
+from app.config import get_settings
 
 logger = logging.getLogger("super_tutor.upload")
 
 router = APIRouter()
 
-# Keep strong references to running tasks so the GC cannot collect them
-# before they complete. Tasks remove themselves via add_done_callback.
-_ACTIVE_TASKS: set[asyncio.Task] = set()
 
 MAX_BYTES = 20 * 1024 * 1024  # 20 MB
 ALLOWED_EXTENSIONS = (".pdf", ".docx")
@@ -38,12 +38,15 @@ ALLOWED_EXTENSIONS = (".pdf", ".docx")
 
 
 @router.post("/upload")
+@limiter.limit(get_settings().rate_limit_upload)
 async def create_upload_session(
+    http_request: Request,
     file: UploadFile = File(...),
     tutoring_type: str = Form(...),
     focus_prompt: Optional[str] = Form(default=None),
     generate_flashcards: bool = Form(default=False),
     generate_quiz: bool = Form(default=False),
+    traces_db: SqliteDb = Depends(get_traces_db),
 ):
     """
     Accept a PDF (or DOCX) file upload, validate it, extract text, then stream
@@ -139,7 +142,7 @@ async def create_upload_session(
                 source=filename,
                 generate_flashcards=generate_flashcards,
                 generate_quiz=generate_quiz,
-                traces_db=_get_traces_db(),
+                traces_db=traces_db,
             )
 
             logger.info("Session stored — session_id=%s", session_id)
@@ -166,9 +169,9 @@ async def create_upload_session(
 
     async def event_generator() -> AsyncGenerator[dict, None]:
         """Dequeue events from background_pipeline and yield them as SSE."""
-        task = asyncio.create_task(background_pipeline())
-        _ACTIVE_TASKS.add(task)
-        task.add_done_callback(_ACTIVE_TASKS.discard)
+        task = asyncio.create_task(asyncio.wait_for(background_pipeline(), timeout=3600))
+        ACTIVE_TASKS.add(task)
+        task.add_done_callback(ACTIVE_TASKS.discard)
         try:
             while True:
                 item = await queue.get()
