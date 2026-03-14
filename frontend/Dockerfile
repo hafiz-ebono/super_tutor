@@ -14,4 +14,4 @@ EXPOSE 3000
 # Disable Next.js telemetry
 ENV NEXT_TELEMETRY_DISABLED=1
 
-CMD ["npx", "next", "dev", "--hostname", "0.0.0.0"]
+CMD ["node", "--max-old-space-size=1024", "node_modules/.bin/next", "dev", "--hostname", "0.0.0.0"]

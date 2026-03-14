@@ -80,6 +80,12 @@ export default function StudyPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+
+  // Cancel any in-flight stream on unmount to release the network connection.
+  useEffect(() => {
+    return () => { readerRef.current?.cancel(); };
+  }, []);
 
   function toggleFlip(index: number) {
     setFlippedCards((prev) => {
@@ -311,6 +317,7 @@ export default function StudyPage() {
       if (!res.ok || !res.body) throw new Error("Stream request failed");
 
       const reader = res.body.getReader();
+      readerRef.current = reader;
       const decoder = new TextDecoder();
       let buffer = "";
 
@@ -373,6 +380,7 @@ export default function StudyPage() {
         return next;
       });
     } finally {
+      readerRef.current = null;
       setIsStreaming(false);
     }
   }

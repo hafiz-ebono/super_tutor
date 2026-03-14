@@ -172,6 +172,8 @@ function CreateForm() {
       setUploadError({ error_kind: "workflow_error", message: "Connection lost during upload. Please try again." });
       setIsSubmitting(false);
       setUploadProgressMessage(null);
+    } finally {
+      reader.cancel();
     }
   }
 
@@ -314,6 +316,7 @@ function CreateForm() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://..."
+              maxLength={2048}
               required={inputMode === "url" && !pasteText}
             />
           </div>
@@ -332,6 +335,7 @@ function CreateForm() {
               onChange={(e) => setTopicDescription(e.target.value)}
               placeholder="Describe a topic you want to learn about… (e.g. 'How transformer models work in NLP', 'The causes of World War I', 'Basics of Kubernetes networking')"
               rows={3}
+              maxLength={1000}
               style={{ resize: "vertical" }}
             />
             {topicDescription.length > 0 && topicDescription.length < 10 && (

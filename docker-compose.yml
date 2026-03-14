@@ -22,7 +22,7 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - WATCHPACK_POLLING=true
-      - NODE_OPTIONS=--max_old_space_size=2048
+    restart: unless-stopped
     depends_on:
       - backend
 

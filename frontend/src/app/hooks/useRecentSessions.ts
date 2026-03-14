@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const STORAGE_KEY = "super_tutor_recent_sessions";
 const MAX_SESSIONS = 5;
@@ -33,9 +33,13 @@ function writeToStorage(sessions: StoredSession[]): void {
 export function useRecentSessions() {
   const [sessions, setSessions] = useState<StoredSession[]>([]);
   const [evictionToast, setEvictionToast] = useState(false);
+  const evictionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setSessions(readFromStorage());
+    return () => {
+      if (evictionTimerRef.current) clearTimeout(evictionTimerRef.current);
+    };
   }, []);
 
   const saveSession = useCallback((entry: Omit<StoredSession, "saved_at">) => {
@@ -57,7 +61,8 @@ export function useRecentSessions() {
 
     if (evicted) {
       setEvictionToast(true);
-      setTimeout(() => setEvictionToast(false), 3000);
+      if (evictionTimerRef.current) clearTimeout(evictionTimerRef.current);
+      evictionTimerRef.current = setTimeout(() => setEvictionToast(false), 3000);
     }
   }, []);
 
