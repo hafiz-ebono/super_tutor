@@ -13,6 +13,8 @@ from app.workflows.session_workflow import (
     run_workflow_background,
     build_session_workflow,
     _parse_json_safe,
+    _MAX_FLASHCARDS,
+    _MAX_QUIZ,
 )
 from app.agents.flashcard_agent import build_flashcard_agent
 from app.agents.quiz_agent import build_quiz_agent
@@ -308,7 +310,7 @@ async def regenerate_section(http_request: Request, session_id: str, section: st
     if section == "flashcards":
         agent = build_flashcard_agent(body.tutoring_type, db=traces_db)
         result = await agent.arun(input_text)
-        new_items = _parse_json_safe(result.content or "[]", [])
+        new_items = _parse_json_safe(result.content or "[]", [])[:_MAX_FLASHCARDS]
         if not new_items:
             raise HTTPException(status_code=500, detail="Generation returned empty response")
         logger.info(
@@ -320,7 +322,7 @@ async def regenerate_section(http_request: Request, session_id: str, section: st
     else:
         agent = build_quiz_agent(body.tutoring_type, db=traces_db)
         result = await agent.arun(input_text)
-        new_items = _parse_json_safe(result.content or "[]", [])
+        new_items = _parse_json_safe(result.content or "[]", [])[:_MAX_QUIZ]
         if not new_items:
             raise HTTPException(status_code=500, detail="Generation returned empty response")
         logger.info(

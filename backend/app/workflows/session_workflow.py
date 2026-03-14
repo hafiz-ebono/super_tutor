@@ -33,6 +33,10 @@ from app.config import get_settings
 
 logger = logging.getLogger("super_tutor.workflow")
 
+# Maximum items returned from agent JSON output — prevents runaway generation.
+_MAX_FLASHCARDS = 50
+_MAX_QUIZ = 20
+
 
 # ---------------------------------------------------------------------------
 # Title helpers (verbatim — tested)
@@ -299,6 +303,7 @@ async def flashcards_step(step_input: StepInput, session_state: dict) -> StepOut
         if not isinstance(flashcards, list):
             raise ValueError("FlashcardAgent output is not a JSON array")
 
+        flashcards = flashcards[:_MAX_FLASHCARDS]
         session_state["flashcards"] = flashcards
         logger.info("flashcards step done — count=%d", len(flashcards), extra={"session_id": session_id, "step": "flashcards"})
         return StepOutput(content=json.dumps(flashcards))
@@ -356,6 +361,7 @@ async def quiz_step(step_input: StepInput, session_state: dict) -> StepOutput:
         if not isinstance(quiz, list):
             raise ValueError("QuizAgent output is not a JSON array")
 
+        quiz = quiz[:_MAX_QUIZ]
         session_state["quiz"] = quiz
         logger.info("quiz step done — count=%d", len(quiz), extra={"session_id": session_id, "step": "quiz"})
         return StepOutput(content=json.dumps(quiz))
