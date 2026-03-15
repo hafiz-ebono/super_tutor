@@ -54,13 +54,14 @@ def _extract_title(content: str, url: str = "") -> str:
 
 _TITLE_ERROR_PREFIXES = (
     "error",
+    "unknown",
     "provider",
     "i cannot",
     "i'm sorry",
     "i apologize",
     "sorry",
 )
-_TITLE_ERROR_SUBSTRINGS = ("returned error", "error occurred")
+_TITLE_ERROR_SUBSTRINGS = ("returned error", "error occurred", "model error")
 
 
 def _is_valid_title(title: str) -> bool:

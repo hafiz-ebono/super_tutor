@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     agent_provider: str = "openai"     # openai | anthropic | groq | openrouter
     agent_model: str = "gpt-4o"        # model ID valid for chosen provider
     agent_api_key: str = ""            # single key for whichever provider is active
+    agent_base_url: str = ""           # optional base URL override for OpenAI-compatible providers
     agent_fallback_provider: str = "" # fallback provider (if different from primary, e.g. "openrouter")
     agent_fallback_model: str = ""     # optional fallback model ID
     agent_fallback_api_key: str = ""  # fallback API key (if different provider; defaults to agent_api_key)

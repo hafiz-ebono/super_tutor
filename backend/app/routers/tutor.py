@@ -192,6 +192,8 @@ async def tutor_stream(
             ).lower()
             if "not related" in err_str or "off_topic" in err_str or "off-topic" in err_str:
                 raise InputCheckError("Message is not related to the session topic.")
+            if any(m in err_str for m in ("rate limit", "rate_limit", "1300", "429", "too many request", "unknown model error")):
+                raise RuntimeError("rate_limit_error")
             raise RuntimeError("team_run_error")
         # Sentinel: yield accumulated text for caller to capture — never forwarded to SSE client.
         yield {"event": "_accumulated", "data": "".join(accumulated)}
@@ -243,6 +245,20 @@ async def tutor_stream(
             if str(e) == "team_run_error":
                 logger.warning("Tutor run error event received — session_id=%s", session_id)
                 yield {"event": "error", "data": json.dumps({"error": "Something went wrong. Please try again."})}
+            elif str(e) == "rate_limit_error" and fallback_model is not None:
+                logger.warning(
+                    "Primary model rate-limited (Team event), switching to fallback — session_id=%s", session_id
+                )
+                fallback_team = build_tutor_team(**team_kwargs, model=fallback_model)
+                yield {"event": "token", "data": json.dumps({"token": "\n*(Switching to backup model…)*\n\n"})}
+                try:
+                    async for event in _stream_and_persist(fallback_team, body.message):
+                        yield event
+                    logger.info("Tutor stream done (fallback) — session_id=%s", session_id)
+                    yield {"event": "done", "data": json.dumps({})}
+                except Exception as e2:
+                    logger.error("Fallback tutor stream error: %s", e2, exc_info=True)
+                    yield {"event": "error", "data": json.dumps({"error": "Both primary and backup models failed. Please try again later."})}
             else:
                 raise
         except Exception as e:

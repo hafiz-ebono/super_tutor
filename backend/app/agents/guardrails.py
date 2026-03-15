@@ -80,14 +80,22 @@ class TopicRelevanceGuardrail(BaseGuardrail):
     def _build_client(self):
         """Build and cache the LLM client for classify calls."""
         from app.config import get_settings
-        provider = get_settings().agent_provider
-        api_key = get_settings().agent_api_key
+        settings = get_settings()
+        provider = settings.agent_provider
+        api_key = settings.agent_api_key
         if provider == "anthropic":
             import anthropic
             return anthropic.Anthropic(api_key=api_key)
         else:
             from openai import OpenAI
-            return OpenAI(api_key=api_key, base_url=get_settings().agent_base_url or None)
+            # Use explicit base_url if configured, otherwise derive from provider.
+            # Mistral uses an OpenAI-compatible endpoint at api.mistral.ai.
+            _PROVIDER_BASE_URLS = {
+                "mistral": "https://api.mistral.ai/v1",
+                "openrouter": "https://openrouter.ai/api/v1",
+            }
+            base_url = settings.agent_base_url or _PROVIDER_BASE_URLS.get(provider)
+            return OpenAI(api_key=api_key, base_url=base_url)
 
     def _classify(self, message: str) -> bool:
         """
