@@ -9,14 +9,7 @@ logger = logging.getLogger("super_tutor.model_factory")
 _SDK_RETRIES = 2
 
 
-def get_model():
-    settings = get_settings()
-    provider = settings.agent_provider.lower()
-    model_id = settings.agent_model
-    api_key = settings.agent_api_key
-
-    logger.debug("Model resolved: provider=%s model=%s", provider, model_id)
-
+def _build_model(provider: str, model_id: str, api_key: str):
     if provider == "anthropic":
         from agno.models.anthropic import Claude
         return Claude(id=model_id, api_key=api_key)
@@ -32,3 +25,24 @@ def get_model():
         if provider == "openrouter":
             kwargs["base_url"] = "https://openrouter.ai/api/v1"
         return OpenAIChat(**kwargs)
+
+
+def get_model():
+    settings = get_settings()
+    provider = settings.agent_provider.lower()
+    model_id = settings.agent_model
+    api_key = settings.agent_api_key
+    logger.debug("Model resolved: provider=%s model=%s", provider, model_id)
+    return _build_model(provider, model_id, api_key)
+
+
+def get_fallback_model():
+    """Return fallback model if configured, else None."""
+    settings = get_settings()
+    if not settings.agent_fallback_provider or not settings.agent_fallback_model:
+        return None
+    provider = settings.agent_fallback_provider.lower()
+    model_id = settings.agent_fallback_model
+    api_key = settings.agent_fallback_api_key or settings.agent_api_key
+    logger.debug("Fallback model resolved: provider=%s model=%s", provider, model_id)
+    return _build_model(provider, model_id, api_key)

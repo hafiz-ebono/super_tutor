@@ -8,7 +8,8 @@ from agno.db.sqlite import SqliteDb
 from agno.exceptions import InputCheckError
 
 from app.models.tutor import TutorStreamRequest
-from app.agents.tutor_team import build_tutor_team, TUTOR_TOKEN_EVENTS, TUTOR_ERROR_EVENT
+from app.agents.tutor_team import build_tutor_team, is_rate_limit_error, TUTOR_TOKEN_EVENTS, TUTOR_ERROR_EVENT
+from app.agents.model_factory import get_fallback_model
 from app.dependencies import get_traces_db, limiter
 from app.config import get_settings
 from app.workflows.session_workflow import build_session_workflow
@@ -66,49 +67,45 @@ async def tutor_stream(session_id: str, request: Request, body: TutorStreamReque
     tutor_session_id = f"tutor:{session_id}"
 
     # Build team — per-request factory, never reuse across requests.
-    team = build_tutor_team(
+    team_kwargs = dict(
         source_content=source_content,
         notes=notes,
         tutoring_type=body.tutoring_type,
         db=traces_db,
-        session_topic=source_content[:300],  # First 300 chars — sufficient for guardrail topic context
+        session_topic=source_content[:300],
     )
+    team = build_tutor_team(**team_kwargs)
+
+    # Build fallback team if configured — used when primary is rate-limited.
+    fallback_model = get_fallback_model()
+    fallback_team = build_tutor_team(**team_kwargs, model=fallback_model) if fallback_model else None
 
     logger.info(
         "Tutor stream start",
         extra={"session_id": session_id, "tutoring_type": body.tutoring_type},
     )
 
+    async def _stream_team(active_team, message: str) -> AsyncGenerator[dict, None]:
+        """Inner generator — yields SSE dicts from one team.arun() call."""
+        run_errored = False
+        async for chunk in active_team.arun(message, stream=True, session_id=tutor_session_id):
+            if chunk.event == TUTOR_ERROR_EVENT:
+                run_errored = True
+                break
+            if chunk.event in TUTOR_TOKEN_EVENTS and chunk.content:
+                yield {"event": "token", "data": json.dumps({"token": chunk.content})}
+        if run_errored:
+            raise RuntimeError("team_run_error")
+
     async def event_generator() -> AsyncGenerator[dict, None]:
-        # Emit stream_start so the frontend can show a typing indicator
-        # before the first token arrives (Claude's Discretion — RESEARCH.md Open Question 4).
         yield {"event": "stream_start", "data": json.dumps({})}
         try:
-            run_errored = False
-            async for chunk in team.arun(body.message, stream=True, session_id=tutor_session_id):
-                if chunk.event == TUTOR_ERROR_EVENT:
-                    run_errored = True
-                    break
-                # Capture both TeamRunContent (coordinator prefix) and
-                # TeamRunIntermediateContent (Explainer tokens).
-                # CRITICAL: Do NOT use RunEvent values here — Team uses TeamRunEvent.
-                # See RESEARCH.md Pitfall 2 for why filtering only one event breaks streaming.
-                if chunk.event in TUTOR_TOKEN_EVENTS and chunk.content:
-                    yield {
-                        "event": "token",
-                        "data": json.dumps({"token": chunk.content}),
-                    }
-
-            if run_errored:
-                logger.warning("Tutor run error event received — session_id=%s", session_id)
-                yield {"event": "error", "data": json.dumps({"error": "Something went wrong. Please try again."})}
-                return
-
+            async for event in _stream_team(team, body.message):
+                yield event
             logger.info("Tutor stream done", extra={"session_id": session_id})
             yield {"event": "done", "data": json.dumps({})}
 
         except InputCheckError as e:
-            # GUARD-01: topic guardrail rejected the message — friendly redirect, not a server error.
             logger.info("Topic guardrail triggered — session_id=%s message=%s", session_id, str(e)[:100])
             yield {
                 "event": "rejected",
@@ -116,8 +113,28 @@ async def tutor_stream(session_id: str, request: Request, body: TutorStreamReque
                     "reason": "That's outside what we're studying today. Let's stay focused on the session material."
                 }),
             }
+        except RuntimeError as e:
+            if str(e) == "team_run_error":
+                logger.warning("Tutor run error event received — session_id=%s", session_id)
+                yield {"event": "error", "data": json.dumps({"error": "Something went wrong. Please try again."})}
+            else:
+                raise
         except Exception as e:
-            logger.error("Tutor stream error: %s", e, exc_info=True, extra={"session_id": session_id})
-            yield {"event": "error", "data": json.dumps({"error": "Something went wrong. Please try again."})}
+            if is_rate_limit_error(e) and fallback_team is not None:
+                logger.warning(
+                    "Primary model rate-limited, switching to fallback — session_id=%s", session_id
+                )
+                yield {"event": "token", "data": json.dumps({"token": "\n*(Switching to backup model…)*\n\n"})}
+                try:
+                    async for event in _stream_team(fallback_team, body.message):
+                        yield event
+                    logger.info("Tutor stream done (fallback) — session_id=%s", session_id)
+                    yield {"event": "done", "data": json.dumps({})}
+                except Exception as e2:
+                    logger.error("Fallback tutor stream error: %s", e2, exc_info=True)
+                    yield {"event": "error", "data": json.dumps({"error": "Both primary and backup models failed. Please try again later."})}
+            else:
+                logger.error("Tutor stream error: %s", e, exc_info=True, extra={"session_id": session_id})
+                yield {"event": "error", "data": json.dumps({"error": "Something went wrong. Please try again."})}
 
     return EventSourceResponse(event_generator())

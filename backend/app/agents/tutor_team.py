@@ -38,6 +38,9 @@ from app.agents.guardrails import (
 from app.agents.model_factory import get_model
 from app.config import get_settings
 
+# Rate-limit exception strings — covers Groq, OpenAI, OpenRouter responses
+_RATE_LIMIT_MARKERS = ("rate limit", "rate_limit", "429", "ratelimit")
+
 # ---------------------------------------------------------------------------
 # Constants — imported by the tutor router to filter the SSE stream
 # ---------------------------------------------------------------------------
@@ -71,12 +74,19 @@ def _build_grounding_block(source_content: str, notes: str) -> str:
 # Factory
 # ---------------------------------------------------------------------------
 
+def is_rate_limit_error(exc: Exception) -> bool:
+    """Return True if the exception looks like a provider rate-limit (429) error."""
+    msg = str(exc).lower()
+    return any(m in msg for m in _RATE_LIMIT_MARKERS) or type(exc).__name__ == "RateLimitError"
+
+
 def build_tutor_team(
     source_content: str,
     notes: str,
     tutoring_type: str,
     db: SqliteDb | None = None,
     session_topic: str = "",   # For TopicRelevanceGuardrail — pass source_content[:300]
+    model=None,                # Override model; defaults to get_model() if None
 ) -> Team:
     """
     Build a fresh Agno Team for a single tutor request.
@@ -103,6 +113,7 @@ def build_tutor_team(
         raise ValueError("source_content is required to build the tutor team")
 
     grounding_block = _build_grounding_block(source_content, notes)
+    active_model = model if model is not None else get_model()
 
     # Instantiate guardrail with session topic context
     topic_guardrail = TopicRelevanceGuardrail(
@@ -115,7 +126,7 @@ def build_tutor_team(
     explainer = Agent(
         name="Explainer",
         role="Answer student questions strictly grounded in the session material",
-        model=get_model(),
+        model=active_model,
         # No db= on the Explainer — history is managed at the Team level only (RESEARCH.md Pitfall 4)
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
         instructions=f"""You are a tutoring specialist.
@@ -144,7 +155,7 @@ Only elaborate if the student explicitly asks for more detail.
     researcher = Agent(
         name="Researcher",
         role="Extend session topics with external Tavily research when the user asks to go deeper or learn more from external sources",
-        model=get_model(),
+        model=active_model,
         # No db= — Team manages history (RESEARCH.md Pitfall 4 / anti-pattern 1)
         tools=researcher_tools,
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
@@ -166,7 +177,7 @@ Keep the response focused on what the student asked to explore further.
     content_writer = Agent(
         name="ContentWriter",
         role="Generate additional study content (notes excerpts, flashcards, or quiz questions) inline in the tutor chat as plain markdown",
-        model=get_model(),
+        model=active_model,
         # No db= — Team manages history (RESEARCH.md Pitfall 4 / anti-pattern 1)
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
         instructions=f"""You are a content generation specialist for this tutoring session.
@@ -187,7 +198,7 @@ Never invent content not found in the session material.
     return Team(
         name="TutorTeam",
         mode=TeamMode.coordinate,
-        model=get_model(),
+        model=active_model,
         members=[explainer, researcher, content_writer],
         pre_hooks=[topic_guardrail],
         post_hooks=[validate_team_output],
@@ -200,18 +211,21 @@ Never invent content not found in the session material.
 You have full access to the student's session content below.
 
 ROUTING RULES:
+- Greeting or intro request ("hello", "introduce yourself", "what can you do") → dispatch to Explainer
 - Question about the session material, explanation request, or clarification → dispatch to Explainer
-- User asks to "go deeper", "learn more about from external sources", "research", or "tell me more externally" → dispatch to Researcher
+- User asks to "go deeper", "learn more from external sources", "research" → dispatch to Researcher
 - User asks for flashcards, notes excerpt, notes summary, or quiz questions → dispatch to ContentWriter
-- Off-topic messages (unrelated to studying this session) → reject directly with a friendly redirect
+- Answering a quiz question you asked them, or following up on your previous response → dispatch to Explainer
+- Clearly off-topic (unrelated to studying, not a quiz answer) → reject with a friendly redirect
 - NEVER ask the student to confirm routing. Dispatch immediately.
 - NEVER reveal agent names (Explainer, Researcher, ContentWriter) or internal routing decisions.
   You are simply "the tutor."
 
 RESPONSE FORMAT when routing to a specialist:
-Begin with exactly ONE sentence of acknowledgment (e.g., "Great question — let me explain."),
-then stop. The specialist will continue with the detailed answer.
-Do not add any conclusion or summary after the specialist's response.
+Output ONLY ONE short acknowledgment sentence (e.g., "Great question — let me explain.").
+STOP IMMEDIATELY after that sentence. Do NOT output anything else.
+The specialist provides the full answer. You must NOT add any text after the specialist finishes —
+no conclusion, no summary, no follow-up, no rejection message. Nothing.
 
 RESPONSE FORMAT when rejecting off-topic questions:
 1-2 sentences explaining the question is outside the session scope, ending with a

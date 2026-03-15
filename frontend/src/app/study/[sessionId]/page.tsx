@@ -630,7 +630,7 @@ export default function StudyPage() {
         </div>
 
         {/* Main content */}
-        <main className={`flex-1 px-6 py-8 md:pb-8 pb-24 transition-all duration-300 ${chatOpen ? "lg:mr-[360px]" : ""}`}>
+        <main className={`flex-1 transition-all duration-300 ${activeTab === "tutor" ? "flex flex-col overflow-hidden" : "px-6 py-8 md:pb-8 pb-24"} ${chatOpen ? "lg:mr-[360px]" : ""}`}>
 
           {/* AI-researched disclaimer — topic sessions only */}
           {session.session_type === "topic" && (
@@ -871,28 +871,40 @@ export default function StudyPage() {
 
           {/* Tutor */}
           {activeTab === "tutor" && (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col flex-1 overflow-hidden">
               {/* Message list */}
-              <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-                {tutorHistory.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    {msg.role === "user" ? (
-                      <div className="max-w-[80%] rounded-2xl rounded-br-sm px-3 py-2 text-sm leading-relaxed bg-blue-600 text-white">
-                        {msg.content}
-                      </div>
-                    ) : (
-                      <div className="w-full max-w-[90%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed bg-zinc-100 text-zinc-900">
-                        <div className="prose prose-sm max-w-none">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 pb-16 md:pb-0">
+                {tutorHistory.map((msg, i) => {
+                  // Don't render empty assistant placeholders — the typing indicator handles that state
+                  if (msg.role === "assistant" && msg.content === "") return null;
+                  return (
+                    <div
+                      key={i}
+                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      {msg.role === "user" ? (
+                        <div className="max-w-[80%] rounded-2xl rounded-br-sm px-3 py-2 text-sm leading-relaxed bg-blue-600 text-white">
+                          {msg.content}
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {/* Typing indicator */}
+                      ) : (
+                        <div className="w-full max-w-[90%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed bg-zinc-100 text-zinc-900">
+                          <div className="prose prose-sm max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                          </div>
+                          {/* Streaming cursor — shows while this is the active streaming message */}
+                          {isTutorStreaming && i === tutorHistory.length - 1 && (
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                              <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "75ms" }} />
+                              <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* Typing indicator — shown before first token arrives */}
                 {isTutorStreaming && tutorHistory[tutorHistory.length - 1]?.content === "" && (
                   <div className="flex justify-start">
                     <div className="rounded-2xl rounded-bl-sm px-3 py-2 bg-zinc-100">
@@ -908,7 +920,7 @@ export default function StudyPage() {
               </div>
 
               {/* Input area */}
-              <div className="border-t border-zinc-200 px-4 py-3 flex gap-2 items-end">
+              <div className="border-t border-zinc-200 px-4 py-3 flex gap-2 items-end bg-white">
                 <textarea
                   ref={tutorTextareaRef}
                   rows={1}
