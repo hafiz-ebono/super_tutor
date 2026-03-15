@@ -86,15 +86,27 @@ async def tutor_stream(session_id: str, request: Request, body: TutorStreamReque
     )
 
     async def _stream_team(active_team, message: str) -> AsyncGenerator[dict, None]:
-        """Inner generator — yields SSE dicts from one team.arun() call."""
-        run_errored = False
+        """Inner generator — yields SSE dicts from one team.arun() call.
+
+        When InputCheckError is raised in a pre-hook, agno does NOT propagate it
+        as an exception — it emits a TeamRunError event instead. We inspect the
+        chunk to distinguish off-topic rejections from real errors and re-raise
+        InputCheckError so the outer handler sends the correct SSE event.
+        """
+        error_chunk = None
         async for chunk in active_team.arun(message, stream=True, session_id=tutor_session_id):
             if chunk.event == TUTOR_ERROR_EVENT:
-                run_errored = True
+                error_chunk = chunk
                 break
             if chunk.event in TUTOR_TOKEN_EVENTS and chunk.content:
                 yield {"event": "token", "data": json.dumps({"token": chunk.content})}
-        if run_errored:
+        if error_chunk is not None:
+            err_str = (
+                str(getattr(error_chunk, "error", "") or "")
+                + str(getattr(error_chunk, "content", "") or "")
+            ).lower()
+            if "not related" in err_str or "off_topic" in err_str or "off-topic" in err_str:
+                raise InputCheckError("Message is not related to the session topic.")
             raise RuntimeError("team_run_error")
 
     async def event_generator() -> AsyncGenerator[dict, None]:

@@ -142,9 +142,23 @@ class TopicRelevanceGuardrail(BaseGuardrail):
             logger.warning("TopicRelevanceGuardrail classifier error (failing open): %s", e)
             return True
 
+    # Patterns that are always on-topic — bypass LLM classifier.
+    # Smaller models (Mistral 7B, Llama) are unreliable at YES/NO for non-content messages.
+    _ALWAYS_ALLOW = (
+        "hello", "hi", "hey", "introduce yourself", "what can you do",
+        "introduce", "capabilities", "please introduce", "who are you",
+        "tell me about yourself",
+    )
+
+    def _is_always_allowed(self, message: str) -> bool:
+        msg = message.lower().strip()
+        return any(pattern in msg for pattern in self._ALWAYS_ALLOW) or len(msg) < 10
+
     def check(self, run_input: TeamRunInput) -> None:
         """Sync check — called from synchronous Team.run() path."""
         message = run_input.input_content_string()
+        if self._is_always_allowed(message):
+            return
         if not self._classify(message):
             logger.info("TopicRelevanceGuardrail triggered (sync) — message rejected as off-topic")
             raise InputCheckError(
@@ -155,6 +169,8 @@ class TopicRelevanceGuardrail(BaseGuardrail):
     async def async_check(self, run_input: TeamRunInput) -> None:
         """Async check — called from Team.arun() path. Uses asyncio.to_thread to avoid blocking."""
         message = run_input.input_content_string()
+        if self._is_always_allowed(message):
+            return
         is_on_topic = await asyncio.to_thread(self._classify, message)
         if not is_on_topic:
             logger.info("TopicRelevanceGuardrail triggered (async) — message rejected as off-topic")
