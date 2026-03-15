@@ -1,5 +1,8 @@
+import asyncio
 import json
 import logging
+import re
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,6 +18,69 @@ from app.config import get_settings
 from app.workflows.session_workflow import build_session_workflow
 
 logger = logging.getLogger("super_tutor.tutor")
+
+_QUIZ_SCORE_RE = re.compile(r"scored?\s+(\d+)\s+out\s+of\s+(\d+)", re.IGNORECASE)
+_FOCUS_AREA_RE = re.compile(
+    r"(?:flashcards?|notes?|content)\s+on\s+['\"]?([^'\"?\.\n]{3,60})['\"]?",
+    re.IGNORECASE,
+)
+
+
+def _extract_quiz_score(message: str) -> dict | None:
+    """Extract quiz score from quiz-results sharing message. Returns None if not a score message."""
+    m = _QUIZ_SCORE_RE.search(message)
+    if m:
+        return {
+            "correct": int(m.group(1)),
+            "total": int(m.group(2)),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    return None
+
+
+def _extract_focus_areas(response_text: str) -> list[str]:
+    """Extract named focus areas from Advisor response text. Returns [] if none found."""
+    return [m.group(1).strip() for m in _FOCUS_AREA_RE.finditer(response_text)]
+
+
+async def _persist_tutor_adaptive_data(
+    session_id: str,
+    traces_db: SqliteDb,
+    quiz_score: dict | None,
+    focus_areas: list[str],
+) -> None:
+    """Write quiz_score and/or focus_areas to workflow session_state in SQLite.
+
+    Uses the BARE session_id (not the tutor namespace) — adaptive data belongs
+    in the workflow session row, not the tutor conversation history row.
+    Non-fatal: logs on failure, never raises.
+    """
+    if not quiz_score and not focus_areas:
+        return
+    try:
+        wf = build_session_workflow(session_id=session_id, session_db=traces_db)
+        existing = wf.get_session(session_id=session_id)
+        if existing is None:
+            logger.warning("_persist_tutor_adaptive_data: session not found — session_id=%s", session_id)
+            return
+        state = (existing.session_data or {}).get("session_state", {})
+        if quiz_score:
+            state["quiz_score"] = quiz_score
+        if focus_areas:
+            existing_areas = state.get("focus_areas", [])
+            merged = list(dict.fromkeys(existing_areas + focus_areas))  # deduplicate, preserve order
+            state["focus_areas"] = merged
+        await wf.asave_session(session=existing)
+        logger.info(
+            "Persisted adaptive data — session_id=%s quiz_score=%s focus_areas=%s",
+            session_id,
+            quiz_score,
+            focus_areas,
+        )
+    except Exception:
+        logger.warning("Failed to persist adaptive data — session_id=%s", session_id, exc_info=True)
+
+
 router = APIRouter()
 
 

@@ -145,6 +145,7 @@ Plans:
 - [x] **Phase 15: Full Specialist Roster + Guardrails** - Researcher, Content Writer, and topic relevance guardrails (completed 2018-03-14)
 - [x] **Phase 16: Frontend Tutor Tab** - 4th study tab with persistent chat, history restore, and intro message (completed 2018-03-15)
 - [x] **Phase 17: In-Tutor Quiz Mode** - In-chat MCQ delivery, answer evaluation, and quiz result integration (completed 2018-03-15)
+- [ ] **Phase 18: Adaptive Intelligence** - Advisor specialist, quiz score persistence, and proactive focus area suggestions
 
 ## Phase Details
 
@@ -207,3 +208,18 @@ Plans:
 Plans:
 - [ ] 17-01-PLAN.md — "Share results with tutor" button in quiz reviewing pane + data-testid wiring
 - [ ] 17-02-PLAN.md — Human verification of full in-tutor quiz flow (QUIZ-01/02/03 end-to-end)
+
+### Phase 18: Adaptive Intelligence
+**Goal**: The Advisor specialist is fully implemented — it identifies weak areas from quiz answer patterns, proactively surfaces focus area suggestions, and persists quiz scores + focus areas to SQLite
+**Depends on**: Phase 17 (QuizMaster functional, quiz result sharing wired)
+**Requirements**: TEAM-07, QUIZ-04, ADVISE-01, ADVISE-02, ADVISE-03
+**Success Criteria** (what must be TRUE):
+  1. When a user completes or struggles with in-tutor quiz questions, the Advisor proactively surfaces a focus area suggestion without being asked
+  2. The Advisor identifies weak areas from answer patterns (wrong answers, repeated questions) and surfaces targeted content offers
+  3. Quiz scores and Advisor-identified focus areas are persisted to SQLite per `session_id` and survive page refresh
+  4. The coordinator correctly dispatches to Advisor for CASE 5 (quiz struggle), CASE 6 (proactive after poor performance), and CASE 7 (suggestion acceptance)
+**Plans**: 2 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — Quiz score + focus area extraction helpers and post-done persistence wiring in tutor router (ADVISE-03)
+- [ ] 18-02-PLAN.md — Human verification of Advisor proactive dispatch (CASE 5/6/7) and SQLite persistence E2E
