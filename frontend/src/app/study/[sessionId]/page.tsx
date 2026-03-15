@@ -71,6 +71,7 @@ export default function StudyPage() {
   const { saveSession, evictionToast } = useRecentSessions();
 
   const MAX_MESSAGES = 20; // 10 user + 10 assistant exchanges
+  const TUTOR_MAX_MESSAGES = 50; // 25 user + 25 assistant exchanges
 
   const [chatOpen, setChatOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; content: string }[]>(() => {
@@ -115,6 +116,9 @@ export default function StudyPage() {
 
   const [isTutorStreaming, setIsTutorStreaming] = useState(false);
   const [tutorInput, setTutorInput] = useState("");
+  const [tutorResetId, setTutorResetId] = useState<string>(() => {
+    try { return localStorage.getItem(`tutor_reset_id:${sessionId}`) ?? "v0"; } catch { return "v0"; }
+  });
   const tutorReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const tutorIntroTriggeredRef = useRef(false);
   const tutorMessagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -348,6 +352,21 @@ export default function StudyPage() {
     }
   }
 
+  function resetTutorChat() {
+    const newResetId = `v${Date.now()}`;
+    setTutorResetId(newResetId);
+    setTutorHistory([]);
+    setTutorIntroSeen(false);
+    tutorIntroTriggeredRef.current = false;
+    try {
+      localStorage.removeItem(`tutor_history:${sessionId}`);
+      localStorage.removeItem(`tutor_intro_seen:${sessionId}`);
+      localStorage.setItem(`tutor_reset_id:${sessionId}`, newResetId);
+    } catch {
+      // ignore
+    }
+  }
+
   async function sendMessage() {
     if (!session || !chatInput.trim() || isStreaming) return;
     const userMessage = chatInput.trim();
@@ -467,6 +486,7 @@ export default function StudyPage() {
           message: userMessage.trim() || "Hello! Please introduce yourself and your capabilities.",
           tutoring_type: session.tutoring_type,
           session_id: sessionId,
+          tutor_reset_id: tutorResetId,
         }),
       });
 
@@ -872,6 +892,22 @@ export default function StudyPage() {
           {/* Tutor */}
           {activeTab === "tutor" && (
             <div className="flex flex-col flex-1 overflow-hidden">
+              {/* Tutor header */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 shrink-0">
+                <span className="text-xs text-zinc-400">
+                  {tutorHistory.filter(m => m.content !== "").length} / {TUTOR_MAX_MESSAGES} messages
+                </span>
+                <button
+                  onClick={resetTutorChat}
+                  disabled={isTutorStreaming || tutorHistory.length === 0}
+                  title="Reset tutor conversation"
+                  className="text-zinc-400 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
               {/* Message list */}
               <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 pb-16 md:pb-0">
                 {tutorHistory.map((msg, i) => {
@@ -920,45 +956,59 @@ export default function StudyPage() {
               </div>
 
               {/* Input area */}
-              <div className="border-t border-zinc-200 px-4 py-3 flex gap-2 items-end bg-white">
-                <textarea
-                  ref={tutorTextareaRef}
-                  rows={1}
-                  value={tutorInput}
-                  onChange={(e) => {
-                    setTutorInput(e.target.value);
-                    e.target.style.height = "auto";
-                    e.target.style.height = `${e.target.scrollHeight}px`;
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (tutorInput.trim() && !isTutorStreaming) {
-                        const msg = tutorInput;
-                        setTutorInput("");
-                        if (tutorTextareaRef.current) tutorTextareaRef.current.style.height = "auto";
-                        sendTutorMessage(msg);
-                      }
-                    }
-                  }}
-                  disabled={isTutorStreaming || !session}
-                  placeholder="Ask your tutor anything about this material..."
-                  className="flex-1 resize-none rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 max-h-32 overflow-y-auto"
-                />
-                <button
-                  onClick={() => {
-                    if (tutorInput.trim() && !isTutorStreaming) {
-                      const msg = tutorInput;
-                      setTutorInput("");
-                      if (tutorTextareaRef.current) tutorTextareaRef.current.style.height = "auto";
-                      sendTutorMessage(msg);
-                    }
-                  }}
-                  disabled={!tutorInput.trim() || isTutorStreaming || !session}
-                  className="rounded-xl bg-blue-600 text-white px-3 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-                >
-                  Send
-                </button>
+              <div className="border-t border-zinc-200 px-4 py-3 flex flex-col gap-2 bg-white">
+                {tutorHistory.filter(m => m.content !== "").length >= TUTOR_MAX_MESSAGES ? (
+                  <div className="flex items-center justify-between py-1">
+                    <p className="text-xs text-zinc-400">Conversation limit reached.</p>
+                    <button
+                      onClick={resetTutorChat}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Start new conversation
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 items-end">
+                    <textarea
+                      ref={tutorTextareaRef}
+                      rows={1}
+                      value={tutorInput}
+                      onChange={(e) => {
+                        setTutorInput(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = `${e.target.scrollHeight}px`;
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (tutorInput.trim() && !isTutorStreaming) {
+                            const msg = tutorInput;
+                            setTutorInput("");
+                            if (tutorTextareaRef.current) tutorTextareaRef.current.style.height = "auto";
+                            sendTutorMessage(msg);
+                          }
+                        }
+                      }}
+                      disabled={isTutorStreaming || !session}
+                      placeholder="Ask your tutor anything about this material..."
+                      className="flex-1 resize-none rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 max-h-32 overflow-y-auto"
+                    />
+                    <button
+                      onClick={() => {
+                        if (tutorInput.trim() && !isTutorStreaming) {
+                          const msg = tutorInput;
+                          setTutorInput("");
+                          if (tutorTextareaRef.current) tutorTextareaRef.current.style.height = "auto";
+                          sendTutorMessage(msg);
+                        }
+                      }}
+                      disabled={!tutorInput.trim() || isTutorStreaming || !session}
+                      className="rounded-xl bg-blue-600 text-white px-3 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                    >
+                      Send
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

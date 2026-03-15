@@ -64,7 +64,7 @@ async def tutor_stream(session_id: str, request: Request, body: TutorStreamReque
     # agno_sessions uses session_id as primary key — sharing the same id would cause
     # the team to overwrite the workflow's session_data (which holds source_content and notes).
     # See RESEARCH.md Pitfall 3.
-    tutor_session_id = f"tutor:{session_id}"
+    tutor_session_id = f"tutor:{session_id}:{body.tutor_reset_id}"
 
     # Build team — per-request factory, never reuse across requests.
     team_kwargs = dict(
