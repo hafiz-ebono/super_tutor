@@ -1,17 +1,24 @@
 """
 Agno Team factory for the Personal Tutor backend.
 
-IMPORTANT USAGE NOTES:
+ARCHITECTURE NOTES:
 - build_tutor_team() is a per-request factory. Never reuse a Team instance across requests.
-  Each call constructs a fresh Team with a fresh Explainer, Researcher, ContentWriter,
-  QuizMaster, and Advisor, grounding the instructions in the current session's
-  source_content and notes.
+  Each call constructs a fresh Team seeded with the current session's source_content and notes.
+- Session state carries all data (source_content, notes). Agent instructions carry only
+  behaviour. add_session_state_to_context=True injects a <session_state> block into the
+  system message of the coordinator AND every dispatched member (Agno passes the flag and a
+  deepcopy of session_state through to member.run() calls — see agno/team/_task_tools.py).
+- source_content and notes are STATIC per session — safe to seed once into session_state.
+  _advisor_task is computed per-request from quiz_score/focus_areas; it stays in the Advisor's
+  instructions f-string rather than session_state to avoid stale-read issues on subsequent runs
+  (Agno loads persisted session_state from SQLite, which would have the old task from run 1).
 - Conversation history is managed at the Team level ONLY. Member agents do NOT get their
-  own db= or add_history_to_context=True. Giving members their own DB would cause
-  duplicate/conflicting session rows (RESEARCH.md Pitfall 4).
+  own db= or add_history_to_context=True — that would create duplicate/conflicting session rows.
+- TeamMode.route sets respond_directly=True: the matched member's response is returned
+  directly to the user with no coordinator wrapping or synthesis step.
 - TUTOR_TOKEN_EVENTS and TUTOR_ERROR_EVENT must be imported by the tutor router to filter
   the Team SSE stream correctly. Two event types carry token content:
-    - TeamRunContent: coordinator's own acknowledgment prefix tokens
+    - TeamRunContent: coordinator's own prefix tokens (rare in route mode)
     - TeamRunIntermediateContent: member tokens (Explainer, Researcher, ContentWriter,
       QuizMaster, Advisor)
   Missing either causes partial responses.
@@ -55,24 +62,6 @@ TUTOR_ERROR_EVENT = TeamRunEvent.run_error.value  # "TeamRunError"
 
 
 # ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
-
-def _build_grounding_block(source_content: str, notes: str) -> str:
-    """
-    Build a grounding context block for injection into all member system prompts.
-
-    source_content is the authoritative grounding (full raw text from the session).
-    notes are the distilled AI-generated derivative — useful for concise reference.
-    Both are included when available for maximum grounding fidelity.
-    """
-    block = f"--- SESSION MATERIAL ---\n{source_content}\n--- END MATERIAL ---"
-    if notes.strip():
-        block += f"\n\n--- SESSION NOTES (summary) ---\n{notes}\n--- END NOTES ---"
-    return block
-
-
-# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
@@ -85,13 +74,19 @@ def is_rate_limit_error(exc: Exception) -> bool:
 def build_tutor_team(
     source_content: str,
     notes: str,
-    tutoring_type: str,
+    tutoring_type: str,  # reserved for future persona differentiation (micro/kid/advanced)
     db: SqliteDb | None = None,
     session_topic: str = "",   # For TopicRelevanceGuardrail — pass source_content[:300]
     model=None,                # Override model; defaults to get_model() if None
+    quiz_score: dict | None = None,   # Latest quiz score from session state (for Advisor context)
+    focus_areas: list[str] | None = None,  # Identified weak areas from session state
 ) -> Team:
     """
     Build a fresh Agno Team for a single tutor request.
+
+    Session data (source_content, notes) is injected via session_state +
+    add_session_state_to_context=True rather than embedded in agent instruction f-strings.
+    This keeps agent instructions pure behaviour descriptions; data flows from state.
 
     Args:
         source_content: The session's full source text. Required — raises ValueError if empty.
@@ -114,8 +109,28 @@ def build_tutor_team(
     if not source_content.strip():
         raise ValueError("source_content is required to build the tutor team")
 
-    grounding_block = _build_grounding_block(source_content, notes)
     active_model = model if model is not None else get_model()
+
+    # ------------------------------------------------------------------
+    # Session state — seeded at construction time, persisted by Agno.
+    # add_session_state_to_context=True injects a <session_state> block into the
+    # system message of the coordinator AND every dispatched member agent.
+    #
+    # source_material / session_notes: static per session, always safe to seed.
+    # quiz_score / focus_areas: loaded fresh from the workflow session on every
+    # request in tutor.py, so construction-time values always reflect the latest
+    # known state. The Advisor reads these from its injected context and reasons
+    # naturally — no pre-computed directives needed.
+    # ------------------------------------------------------------------
+    _topic_name = source_content.split("\n")[0].strip().lstrip("#").strip() or "this material"
+
+    team_session_state: dict = {"source_material": source_content}
+    if notes.strip():
+        team_session_state["session_notes"] = notes
+    if quiz_score:
+        team_session_state["quiz_score"] = quiz_score
+    if focus_areas:
+        team_session_state["focus_areas"] = focus_areas
 
     # Instantiate guardrail with session topic context
     topic_guardrail = TopicRelevanceGuardrail(
@@ -129,18 +144,19 @@ def build_tutor_team(
         name="Explainer",
         role="Answer student questions strictly grounded in the session material",
         model=active_model,
-        # No db= on the Explainer — history is managed at the Team level only (RESEARCH.md Pitfall 4)
+        # No db= — history is managed at the Team level only
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
-        instructions=f"""You are a tutoring specialist.
-Answer ONLY from the session material below. Do not use outside knowledge.
+        instructions="""\
+You are a tutoring specialist.
+Answer ONLY from the source material provided in the session state.
+Do not use outside knowledge.
 If the student's question is not covered in the material, say exactly:
 "I can only answer about this session's material."
 
 RESPONSE FORMAT: Plain text only. No markdown, no bullet points, no bold text,
 no headers. Write in clear prose. Keep answers focused and concise.
-Only elaborate if the student explicitly asks for more detail.
-
-{grounding_block}""",
+Only elaborate if the student explicitly asks for more detail.\
+""",
     )
 
     # ------------------------------------------------------------------
@@ -149,8 +165,6 @@ Only elaborate if the student explicitly asks for more detail.
     try:
         researcher_tools = [TavilyTools()]
     except Exception:
-        # TAVILY_API_KEY not set or TavilyTools init failed — Researcher will have no tools
-        # but won't crash the factory. In production, set TAVILY_API_KEY in the environment.
         logger.warning("TavilyTools init failed — Researcher will have no search tools", exc_info=True)
         researcher_tools = []
 
@@ -158,19 +172,19 @@ Only elaborate if the student explicitly asks for more detail.
         name="Researcher",
         role="Extend session topics with external Tavily research when the user asks to go deeper or learn more from external sources",
         model=active_model,
-        # No db= — Team manages history (RESEARCH.md Pitfall 4 / anti-pattern 1)
+        # No db= — Team manages history
         tools=researcher_tools,
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
-        instructions=f"""You are a research specialist for this tutoring session.
+        instructions="""\
+You are a research specialist for this tutoring session.
 When dispatched, search for deeper information on the topic and synthesize findings.
-Ground your response in BOTH the search results AND the session material below.
+Ground your response in BOTH the search results AND the source material in the session state.
 Present findings as educational prose. Cite sources at the end.
 Do not introduce information unrelated to the session topic.
 
 RESPONSE FORMAT: Plain text prose with source citations at the end.
-Keep the response focused on what the student asked to explore further.
-
-{grounding_block}""",
+Keep the response focused on what the student asked to explore further.\
+""",
     )
 
     # ------------------------------------------------------------------
@@ -180,10 +194,12 @@ Keep the response focused on what the student asked to explore further.
         name="ContentWriter",
         role="Generate additional study content (notes excerpts, flashcards, or quiz questions) inline in the tutor chat as plain markdown",
         model=active_model,
-        # No db= — Team manages history (RESEARCH.md Pitfall 4 / anti-pattern 1)
+        # No db= — Team manages history
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
-        instructions=f"""You are a content generation specialist for this tutoring session.
-Generate study content based on the student's request using ONLY the session material below.
+        instructions="""\
+You are a content generation specialist for this tutoring session.
+Generate study content based on the student's request using ONLY the source material
+provided in the session state.
 
 OUTPUT FORMAT RULES (strictly enforced — never output raw JSON):
 - For notes excerpts: Markdown prose with ## headings and **bold** key terms
@@ -192,9 +208,8 @@ OUTPUT FORMAT RULES (strictly enforced — never output raw JSON):
 
 Always produce the content inline — no preamble like "Here are your flashcards:".
 Generate 2-5 items per request unless the student specifies more.
-Never invent content not found in the session material.
-
-{grounding_block}""",
+Never invent content not found in the session material.\
+""",
     )
 
     # ------------------------------------------------------------------
@@ -204,12 +219,13 @@ Never invent content not found in the session material.
         name="QuizMaster",
         role="Deliver one multiple-choice question at a time from session material, evaluate the student's typed answer, and guide them through a quiz session",
         model=active_model,
-        # No db= — Team manages history (RESEARCH.md Pitfall 4)
+        # No db= — Team manages history
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
-        instructions=f"""You are a quiz delivery specialist for this tutoring session.
+        instructions="""\
+You are a quiz delivery specialist for this tutoring session.
 
 STRICT RULES:
-- Generate questions ONLY from the session material below — never from general knowledge.
+- Generate questions ONLY from the source material in the session state — never from general knowledge.
 - Format each question as: question text on one line, then A) B) C) D) options each on their own line.
 - Deliver ONE question at a time. Never list multiple questions in a single response.
 - Before generating a question, scan the conversation history to avoid repeating one already asked
@@ -219,100 +235,90 @@ STRICT RULES:
   give a brief explanation of all options, and end with: "Want another question?"
 - If the student shares Quiz tab results (e.g., "I got 3/5"): acknowledge the score, note which
   areas to reinforce, calibrate difficulty accordingly, then offer a question.
-- Track quiz state implicitly from conversation history — no external state needed.
-
-{grounding_block}""",
+- Track quiz state implicitly from conversation history — no external state needed.\
+""",
     )
 
     # ------------------------------------------------------------------
-    # Advisor — detects weak areas, surfaces focus suggestions (Phase 18)
+    # Advisor — surfaces progress summary and focus suggestions (Phase 18)
     # ------------------------------------------------------------------
     advisor = Agent(
         name="Advisor",
-        role="Analyze the student's conversation patterns to identify weak areas and surface proactive focus suggestions",
+        role="Give the student a personalised progress update based on their quiz history and session context",
         model=active_model,
-        # No db= — Team manages history (RESEARCH.md Pitfall 4)
+        # No db= — Team manages history
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
-        instructions=f"""You are an adaptive learning advisor for this tutoring session.
+        instructions="""\
+You are an adaptive learning advisor for this tutoring session.
 
-YOUR JOB: Read the full conversation history and detect weak areas. Surface named focus suggestions.
+Look at the session state and conversation history to understand the student's progress:
+- If quiz_score is present: report the score with percentage, name any focus_areas, and offer to generate extra flashcards on those topics.
+- If only focus_areas are present: name the weak areas and offer targeted flashcards.
+- If neither is present: let the student know you don't have any quiz or progress data yet, and ask them to share their quiz results or tell you what they've been studying so you can give them useful feedback.
 
-STRUGGLE DETECTION (heuristics — LLM-based, not deterministic counting):
-- When you detect a pattern of wrong quiz answers on related concepts → flag as weak area
-- When you detect the same concept phrase repeated across multiple student messages → flag as repeated confusion
-- When the student explicitly says "I don't understand X" → immediately flag X
-
-RESPONSE RULES:
-- Surface NAMED focus areas — use the specific concept name from the material, not vague "you struggled".
-- Offer targeted content via a concrete suggestion: "Want me to generate extra flashcards on [concept]?"
-- Do NOT generate the content yourself — signal the suggestion; the coordinator will route to ContentWriter if accepted.
-- Keep responses to 2-3 sentences maximum.
-- If no clear weak areas exist: give an encouraging summary instead of forcing a suggestion.
-
-{grounding_block}""",
+Keep your response to 2-3 sentences. Be direct and encouraging.
+Do NOT generate flashcards or quiz questions — only suggest them.\
+""",
     )
 
     return Team(
         name="TutorTeam",
-        mode=TeamMode.coordinate,
+        mode=TeamMode.route,
         model=active_model,
         members=[explainer, researcher, content_writer, quiz_master, advisor],
         pre_hooks=[topic_guardrail],
         post_hooks=[validate_team_output],
         db=db,
+        session_state=team_session_state,
+        add_session_state_to_context=True,
         add_history_to_context=True,
         num_history_runs=get_settings().tutor_history_window,
         enable_session_summaries=False,
         stream_member_events=True,
-        instructions=f"""You are a personal tutor assistant for a student studying specific session material.
-You have full access to the student's session content below.
+        debug_mode=get_settings().debug,
+        instructions=f"""\
+You are a personal tutor router. Route each student message to the right specialist.
 
-ROUTING RULES (7 cases):
-- Greeting or intro request ("hello", "introduce yourself", "what can you do") → dispatch to Explainer
-- Question about the session material, explanation request, or clarification → dispatch to Explainer
-- User asks to "go deeper", "learn more from external sources", "research" → dispatch to Researcher
-- User asks for flashcards, notes excerpt, notes summary, or quiz questions → dispatch to ContentWriter
-- Answering a quiz question you asked them, or following up on your previous response → dispatch to Explainer
-- Clearly off-topic (unrelated to studying, not a quiz answer) → reject with a friendly redirect
+SPECIALISTS:
+- Explainer: answers questions strictly from the session material
+- QuizMaster: delivers and evaluates multiple-choice quiz questions
+- ContentWriter: generates flashcards, notes excerpts, and study content
+- Advisor: gives a personalised progress report using the student's quiz history
+- Researcher: finds deeper information from external sources
 
-- CASE 2: User says "quiz me" / "test me" / "give me a question" / "start a quiz" / any request to be tested
-  → dispatch to QuizMaster
+ROUTING EXAMPLES — classify the student's intent and route accordingly:
 
-- CASE 3: User types a quiz answer — single letter (A/B/C/D), or free-text identifying an option
-  (e.g., "I think it's B", "probably C", "the answer is D") — AND the last QuizMaster message
-  contained A/B/C/D options → dispatch to QuizMaster
+Student: "hello" → Explainer
+Student: "what can you do?" → Explainer
+Student: "what is {_topic_name}?" → Explainer
+Student: "explain this concept to me" → Explainer
+Student: "can you simplify that?" → Explainer
 
-- CASE 4: User shares quiz tab results ("I got X/Y", "my score was", "quiz results") OR asks
-  "how many did I get right" → dispatch to QuizMaster
+Student: "quiz me" → QuizMaster
+Student: "test me on this" → QuizMaster
+Student: "give me a question" → QuizMaster
+Student: "I think it's B" → QuizMaster
+Student: "the answer is C" → QuizMaster
+Student: "probably A, the first option" → QuizMaster
+Student: "I got 3 out of 5" → QuizMaster
+Student: "I scored 7/10 on the quiz" → QuizMaster
+Student: "I just finished the quiz" → QuizMaster
 
-- CASE 5: After QuizMaster evaluates an answer AND you detect a struggle pattern (multiple wrong
-  answers on related concepts) → proactively dispatch Advisor with this injected context:
-  "The student has been working through quiz questions — check for weak area patterns."
+Student: "make me flashcards" → ContentWriter
+Student: "generate notes on this topic" → ContentWriter
+Student: "give me study questions" → ContentWriter
+Student: "yes, go ahead" [when Advisor just offered to generate content] → ContentWriter
+Student: "sure, please generate those flashcards" → ContentWriter
 
-- CASE 6: User says "how am I doing" / "what should I focus on" / "where am I weak" /
-  "what are my weak areas" → dispatch to Advisor
+Student: "how am I doing?" → Advisor
+Student: "what should I focus on?" → Advisor
+Student: "where am I weak?" → Advisor
+Student: "what are my weak areas?" → Advisor
 
-- CASE 7: Advisor has just suggested extra content AND the student's message expresses acceptance
-  ("yes", "sure", "okay", "please", "go ahead") → dispatch to ContentWriter with topic context
-  from the Advisor's suggestion. Only fire this rule when the prior assistant turn was an
-  Advisor suggestion — do not trigger for generic "yes" in other contexts.
+Student: "I want to go deeper on this" → Researcher
+Student: "find me more information about this" → Researcher
+Student: "research recent developments in this area" → Researcher
 
-- NEVER ask the student to confirm routing. Dispatch immediately.
-- NEVER reveal agent names (Explainer, Researcher, ContentWriter, QuizMaster, Advisor) or internal routing decisions.
-  You are simply "the tutor."
-
-RESPONSE FORMAT when routing to a specialist:
-Call the appropriate member tool to get the specialist's response.
-After receiving the specialist's response from the tool, output it VERBATIM — reproduce it
-exactly as given with NO preamble, NO commentary, NO additions, and NO conclusion of your own.
-The specialist's response IS your complete response to the student.
-Do NOT paraphrase, summarise, or wrap it in any framing text.
-
-RESPONSE FORMAT when rejecting off-topic questions:
-1-2 sentences explaining the question is outside the session scope, ending with a
-friendly redirect to the session material. Example:
-"That's outside what we're studying today — I'm here to help with [topic].
-Is there something from the material you'd like to explore?"
-
-{grounding_block}""",
+Route to exactly one specialist per message. Never add your own commentary.\
+""",
     )

@@ -188,7 +188,7 @@ export default function StudyPage() {
       localStorage.setItem(`tutor_intro_seen:${sessionId}`, "true");
     } catch { /* ignore */ }
     sendTutorMessage(""); // sendTutorMessage sends sentinel string when empty — see Plan 01
-  }, [activeTab, session, sessionId]); // minimal deps — ref+state guards handle the rest
+  }, [activeTab, session, sessionId, tutorResetId]); // tutorResetId dep triggers re-run on reset
 
   // Auto-focus textarea when chat panel opens
   useEffect(() => {
@@ -357,6 +357,10 @@ export default function StudyPage() {
   }
 
   function resetTutorChat() {
+    // Cancel any in-flight stream so isTutorStreaming doesn't block the intro re-trigger
+    tutorReaderRef.current?.cancel();
+    tutorReaderRef.current = null;
+    setIsTutorStreaming(false);
     const newResetId = `v${Date.now()}`;
     setTutorResetId(newResetId);
     setTutorHistory([]);

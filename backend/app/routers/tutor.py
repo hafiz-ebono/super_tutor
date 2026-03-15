@@ -21,10 +21,48 @@ logger = logging.getLogger("super_tutor.tutor")
 
 _QUIZ_SCORE_RE = re.compile(r"scored?\s+(\d+)\s+out\s+of\s+(\d+)", re.IGNORECASE)
 _FOCUS_AREA_RE = re.compile(
-    r"(?:flashcards?|notes?|content|material|concepts?|topics?)\s+on\s+['\"]?([^'\"?\.\n]{3,60})['\"]?"
-    r"|(?:focus(?:ing)?\s+on|review(?:ing)?\s+|study(?:ing)?\s+)([^'\"?\.\n]{3,60})",
+    r"(?:flashcards?|notes?|content|material|concepts?|topics?)\s+on\s+['\"]?([A-Za-z][^'\"?\.\n]{2,59})['\"]?"
+    r"|(?:focus(?:ing)?\s+on|review(?:ing)?\s+|study(?:ing)?\s+)([A-Za-z][^'\"?\.\n]{2,59})",
     re.IGNORECASE,
 )
+
+
+def _build_progress_response(
+    session_state: dict,
+    source_content: str,
+) -> str | None:
+    """
+    Return a pre-formed progress summary if the session state has adaptive data,
+    or a prompt to get quizzed if there's no data yet. Returns None only if we
+    should fall through to the LLM (currently never, always returns a string).
+
+    Bypasses the LLM for this deterministic query so small models can't produce
+    "I don't have the necessary tools" responses.
+    """
+    quiz_score = session_state.get("quiz_score")
+    focus_areas = session_state.get("focus_areas", [])
+    topic = source_content.split("\n")[0].strip().lstrip("#").strip() or "this material"
+
+    if not quiz_score and not focus_areas:
+        return (
+            f"You haven't been quizzed yet — want me to test you on {topic} "
+            f"so I can track your progress?"
+        )
+
+    parts = []
+    if quiz_score:
+        correct = quiz_score.get("correct", "?")
+        total = quiz_score.get("total", "?")
+        pct = round(correct / total * 100) if total else 0
+        parts.append(f"Your last quiz score was {correct}/{total} ({pct}%).")
+    if focus_areas:
+        areas_str = ", ".join(focus_areas[:3])
+        parts.append(f"Based on your answers, focus on: {areas_str}.")
+        parts.append("Want me to generate extra flashcards on any of these?")
+    elif quiz_score:
+        parts.append("Keep it up — want another quiz question?")
+
+    return " ".join(parts)
 
 
 def _extract_quiz_score(message: str) -> dict | None:
@@ -153,6 +191,8 @@ async def tutor_stream(
         tutoring_type=body.tutoring_type,
         db=traces_db,
         session_topic=source_content[:300],
+        quiz_score=session_state.get("quiz_score"),
+        focus_areas=session_state.get("focus_areas", []),
     )
     team = build_tutor_team(**team_kwargs)
 
@@ -226,6 +266,17 @@ async def tutor_stream(
             )
             ACTIVE_TASKS.add(task)
             task.add_done_callback(ACTIVE_TASKS.discard)
+
+        # Progress queries ("how am I doing?", "where am I weak?") are answered
+        # deterministically from session state — bypasses the LLM so small models
+        # can't produce "I don't have the necessary tools" responses.
+        if _PROGRESS_QUERY_RE.search(body.message):
+            progress_text = _build_progress_response(session_state, source_content)
+            if progress_text:
+                logger.info("Progress query intercepted — responding deterministically")
+                yield {"event": "token", "data": json.dumps({"token": progress_text})}
+                yield {"event": "done", "data": json.dumps({})}
+                return
 
         try:
             async for event in _stream_and_persist(team, body.message):
