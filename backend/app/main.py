@@ -122,7 +122,13 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
     The session workflow is registered in workflows=[] so it appears in the
     AgentOS playground. This representative instance (all steps enabled) is
     for UI visibility only — per-request instances are created inside routers.
+
+    TutorTeam (Phase 14+) is now registered via teams=[placeholder_team] so it
+    is visible in the AgentOS control plane playground UI alongside all other
+    agents. Per-request Team instances continue to be created in the tutor
+    router at request time with db= injection for tracing.
     """
+    from app.agents.tutor_team import build_tutor_team
     traces_db = _traces_db  # reuse the single shared instance
     session_workflow = build_session_workflow(
         session_id="playground",
@@ -130,6 +136,13 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
         session_type="topic",
         generate_flashcards=True,
         generate_quiz=True,
+    )
+    placeholder_team = build_tutor_team(
+        source_content="[AgentOS placeholder — not a real session]",
+        notes="",
+        tutoring_type="micro_learning",
+        db=traces_db,
+        session_topic="[placeholder]",
     )
     agent_os = AgentOS(
         agents=[
@@ -140,8 +153,7 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
             build_research_agent(db=traces_db),
         ],
         workflows=[session_workflow],
-        # TutorTeam (Phase 14+) is not registered here — Teams are traced via db= injection
-        # at request time. Per-request Team instances appear in AgentOS via shared traces_db.
+        teams=[placeholder_team],
         base_app=fastapi_app,
         db=traces_db,
         tracing=True,
