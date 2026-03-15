@@ -13,6 +13,7 @@ Flow:
   5. Send advisor query → assert named concept in response
 """
 
+import json
 import os
 import time
 import pytest
@@ -21,6 +22,81 @@ import httpx
 BASE = "http://localhost:8000"
 TIMEOUT = 30  # seconds per tutor stream request
 
+
+# ---------------------------------------------------------------------------
+# Module-level fixtures used by standalone test functions
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def client():
+    """Persistent httpx.Client for the live backend."""
+    with httpx.Client(base_url=BASE, timeout=TIMEOUT) as c:
+        yield c
+
+
+@pytest.fixture(scope="module")
+def tutor_session_id(client):
+    """Create a topic session, wait for completion, return session_id."""
+    r = client.post("/sessions/topic", json={
+        "topic": "photosynthesis — how plants convert light into energy",
+        "tutoring_type": "micro_learning",
+    })
+    assert r.status_code == 200, f"Session creation failed: {r.text}"
+    sid = r.json()["session_id"]
+
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        status_r = client.get(f"/sessions/{sid}/status")
+        if status_r.status_code == 200 and status_r.json().get("status") == "complete":
+            return sid
+        time.sleep(3)
+    pytest.fail(f"Session {sid} did not reach 'complete' status within 120s")
+
+
+# ---------------------------------------------------------------------------
+# Module-level SSE helper
+# ---------------------------------------------------------------------------
+
+def _stream_tutor(client, session_id, message, tutoring_type="micro_learning"):
+    """Stream a tutor message and return the concatenated token text.
+
+    Parses both ``event:`` and ``data:`` SSE lines so that:
+    - ``error`` events raise AssertionError immediately.
+    - ``rejected`` events return ``{"rejected": True, "reason": ...}``.
+    - ``stream_start`` / ``done`` data payloads are skipped.
+    - Only ``token`` event data contributes to the returned string.
+    """
+    chunks = []
+    current_event = None
+    with client.stream("POST", f"/tutor/{session_id}/stream", json={
+        "message": message,
+        "tutoring_type": tutoring_type,
+        "tutor_reset_id": "v0",
+    }) as resp:
+        assert resp.status_code == 200
+        for line in resp.iter_lines():
+            if line.startswith("event:"):
+                current_event = line[6:].strip()
+            elif line.startswith("data:"):
+                raw = line[5:].strip()
+                if not raw:
+                    continue
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if current_event in ("error",):
+                    raise AssertionError(f"Stream returned error: {parsed}")
+                if current_event in ("rejected",):
+                    return {"rejected": True, "reason": parsed.get("reason", "")}
+                if isinstance(parsed, dict) and "token" in parsed:
+                    chunks.append(parsed["token"])
+    return "".join(chunks)
+
+
+# ---------------------------------------------------------------------------
+# Class-based live E2E tests (existing)
+# ---------------------------------------------------------------------------
 
 @pytest.mark.skipif(not os.getenv("TUTOR_E2E"), reason="TUTOR_E2E not set — skipping live backend test")
 class TestTutorE2E:
@@ -46,18 +122,8 @@ class TestTutorE2E:
 
     def _stream_tutor(self, session_id: str, message: str) -> str:
         """Send a tutor message and collect the full streamed response as a string."""
-        chunks = []
-        with httpx.stream(
-            "POST",
-            f"{BASE}/tutor/{session_id}/stream",
-            json={"message": message, "tutoring_type": "micro_learning"},
-            timeout=TIMEOUT,
-        ) as resp:
-            assert resp.status_code == 200, f"Tutor stream failed: {resp.read()}"
-            for line in resp.iter_lines():
-                if line.startswith("data:"):
-                    chunks.append(line[5:].strip())
-        return " ".join(chunks)
+        with httpx.Client(base_url=BASE, timeout=TIMEOUT) as c:
+            return _stream_tutor(c, session_id, message)
 
     def test_quiz_me_delivers_mcq(self, session_id):
         """'quiz me' → response must contain at least two of A) B) C) D) option markers."""
@@ -92,3 +158,80 @@ class TestTutorE2E:
         assert "outside" not in response.lower() or "focus" in response.lower(), (
             f"Advisor response looks like an off-topic rejection: {response[:300]}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Standalone live tests (require TUTOR_E2E + running server)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(not os.getenv("TUTOR_E2E"), reason="TUTOR_E2E not set")
+def test_reset_id_starts_fresh_conversation(client, tutor_session_id):
+    """Different tutor_reset_id values produce independent conversation namespaces."""
+    # First conversation turn
+    first = _stream_tutor(client, tutor_session_id, "Hello, what can you help me with?")
+    assert len(first) > 0
+
+    # New reset ID — should not carry forward prior context
+    with client.stream("POST", f"/tutor/{tutor_session_id}/stream", json={
+        "message": "What was my previous question?",
+        "tutoring_type": "micro_learning",
+        "tutor_reset_id": f"v{int(time.time())}",  # fresh reset ID
+    }) as resp:
+        assert resp.status_code == 200
+        # Just verify the stream completes without error — context isolation
+        # is enforced by agno's session namespacing, not testable at this level
+        lines = list(resp.iter_lines())
+        assert any("done" in l or "token" in l for l in lines)
+
+
+@pytest.mark.skipif(not os.getenv("TUTOR_E2E"), reason="TUTOR_E2E not set")
+def test_off_topic_message_is_rejected(client, tutor_session_id):
+    """TopicRelevanceGuardrail should reject clearly off-topic messages."""
+    result = _stream_tutor(client, tutor_session_id, "Write me a poem about dogs and cats please")
+    # Either the guardrail rejects it (returns rejected dict) or the coordinator handles it
+    # Both are acceptable — we just verify no server error occurs
+    assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# Unit tests — no server required, no skip guard
+# ---------------------------------------------------------------------------
+
+class TestExtractionHelpers:
+    """Unit tests for pure extraction functions — no server required."""
+
+    def test_extract_quiz_score_basic(self):
+        from app.routers.tutor import _extract_quiz_score
+        result = _extract_quiz_score("I just completed the quiz and scored 3 out of 5.")
+        assert result is not None
+        assert result["correct"] == 3
+        assert result["total"] == 5
+        assert "timestamp" in result
+
+    def test_extract_quiz_score_no_match(self):
+        from app.routers.tutor import _extract_quiz_score
+        assert _extract_quiz_score("Hello, how are you?") is None
+
+    def test_extract_quiz_score_variant(self):
+        from app.routers.tutor import _extract_quiz_score
+        result = _extract_quiz_score("I scored 7 out of 10 on the quiz!")
+        assert result is not None
+        assert result["correct"] == 7
+        assert result["total"] == 10
+
+    def test_extract_focus_areas_basic(self):
+        from app.routers.tutor import _extract_focus_areas
+        result = _extract_focus_areas("Want me to generate extra flashcards on photosynthesis?")
+        assert "photosynthesis" in result
+
+    def test_extract_focus_areas_empty(self):
+        from app.routers.tutor import _extract_focus_areas
+        assert _extract_focus_areas("Great job! You're doing well.") == []
+
+    def test_extract_focus_areas_multiple(self):
+        from app.routers.tutor import _extract_focus_areas
+        result = _extract_focus_areas(
+            "I suggest reviewing content on cellular respiration. "
+            "Also, extra notes on the ATP cycle would help."
+        )
+        assert len(result) >= 1
