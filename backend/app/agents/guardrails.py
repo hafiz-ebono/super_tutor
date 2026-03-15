@@ -75,6 +75,19 @@ class TopicRelevanceGuardrail(BaseGuardrail):
 
     def __init__(self, session_topic: str) -> None:
         self.session_topic = session_topic
+        self._llm_client = self._build_client()
+
+    def _build_client(self):
+        """Build and cache the LLM client for classify calls."""
+        from app.config import get_settings
+        provider = get_settings().agent_provider
+        api_key = get_settings().agent_api_key
+        if provider == "anthropic":
+            import anthropic
+            return anthropic.Anthropic(api_key=api_key)
+        else:
+            from openai import OpenAI
+            return OpenAI(api_key=api_key, base_url=get_settings().agent_base_url or None)
 
     def _classify(self, message: str) -> bool:
         """
@@ -90,7 +103,7 @@ class TopicRelevanceGuardrail(BaseGuardrail):
         prompt = (
             f"You are a topic relevance classifier for a study tutor.\n\n"
             f"Session topic context (first 300 chars of source material):\n{self.session_topic}\n\n"
-            f"User message: {message}\n\n"
+            f"User message:\n<user_message>\n{message}\n</user_message>\n\n"
             f"Is this message relevant to studying or understanding the session topic?\n"
             f"Answer YES or NO only.\n\n"
             f"Rules:\n"
@@ -106,13 +119,11 @@ class TopicRelevanceGuardrail(BaseGuardrail):
         )
 
         provider = settings.agent_provider.lower()
-        api_key = settings.agent_api_key
         model_id = settings.agent_model
+        client = self._llm_client
 
         try:
             if provider == "anthropic":
-                import anthropic
-                client = anthropic.Anthropic(api_key=api_key)
                 response = client.messages.create(
                     model=model_id,
                     max_tokens=10,
@@ -120,15 +131,6 @@ class TopicRelevanceGuardrail(BaseGuardrail):
                 )
                 answer = (response.content[0].text if response.content else "YES").upper()
             else:
-                from openai import OpenAI
-                kwargs: dict = {"api_key": api_key}
-                if provider == "openrouter":
-                    kwargs["base_url"] = "https://openrouter.ai/api/v1"
-                elif provider == "groq":
-                    kwargs["base_url"] = "https://api.groq.com/openai/v1"
-                elif provider == "mistral":
-                    kwargs["base_url"] = "https://api.mistral.ai/v1"
-                client = OpenAI(**kwargs)
                 resp = client.chat.completions.create(
                     model=model_id,
                     messages=[{"role": "user", "content": prompt}],
