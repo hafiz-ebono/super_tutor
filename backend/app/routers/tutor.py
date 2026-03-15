@@ -20,6 +20,11 @@ from app.workflows.session_workflow import build_session_workflow
 logger = logging.getLogger("super_tutor.tutor")
 
 _QUIZ_SCORE_RE = re.compile(r"scored?\s+(\d+)\s+out\s+of\s+(\d+)", re.IGNORECASE)
+_PROGRESS_QUERY_RE = re.compile(
+    r"how\s+am\s+i\s+doing|where\s+am\s+i\s+weak|what\s+(?:are\s+my\s+)?(?:weak\s+areas?|gaps?|struggles?)"
+    r"|my\s+progress|how\s+(?:well|good)\s+am\s+i|what\s+should\s+i\s+(?:focus|study|review)",
+    re.IGNORECASE,
+)
 _FOCUS_AREA_RE = re.compile(
     r"(?:flashcards?|notes?|content|material|concepts?|topics?)\s+on\s+['\"]?([A-Za-z][^'\"?\.\n]{2,59})['\"]?"
     r"|(?:focus(?:ing)?\s+on|review(?:ing)?\s+|study(?:ing)?\s+)([A-Za-z][^'\"?\.\n]{2,59})",
