@@ -148,14 +148,15 @@ export default function StudyPage() {
     }
   }, [chatHistory, sessionId]);
 
-  // Persist tutor history to localStorage whenever it changes
+  // Persist tutor history to localStorage whenever it changes (skip during streaming)
   useEffect(() => {
+    if (isTutorStreaming) return; // wait until turn is complete
     if (tutorHistory.length > 0) {
       try {
         localStorage.setItem(`tutor_history:${sessionId}`, JSON.stringify(tutorHistory));
       } catch { /* ignore quota errors */ }
     }
-  }, [tutorHistory, sessionId]);
+  }, [tutorHistory, sessionId, isTutorStreaming]);
 
   useEffect(() => {
     try {
@@ -362,9 +363,9 @@ export default function StudyPage() {
     setTutorIntroSeen(false);
     tutorIntroTriggeredRef.current = false;
     try {
+      localStorage.setItem(`tutor_reset_id:${sessionId}`, newResetId);
       localStorage.removeItem(`tutor_history:${sessionId}`);
       localStorage.removeItem(`tutor_intro_seen:${sessionId}`);
-      localStorage.setItem(`tutor_reset_id:${sessionId}`, newResetId);
     } catch {
       // ignore
     }
@@ -475,11 +476,13 @@ export default function StudyPage() {
 
   async function sendTutorMessage(userMessage: string) {
     if (!session || isTutorStreaming) return;
-    if (userMessage.trim()) {
-      setTutorHistory((prev) => [...prev, { role: "user" as const, content: userMessage.trim() }]);
-    }
+    setTutorHistory((prev) => {
+      const next = userMessage.trim()
+        ? [...prev, { role: "user" as const, content: userMessage.trim() }]
+        : [...prev];
+      return [...next, { role: "assistant" as const, content: "" }];
+    });
     setIsTutorStreaming(true);
-    setTutorHistory((prev) => [...prev, { role: "assistant" as const, content: "" }]);
 
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tutor/${sessionId}/stream`, {
@@ -552,7 +555,7 @@ export default function StudyPage() {
       // Remove empty assistant bubble if stream completed without content
       setTutorHistory((prev) => {
         const last = prev[prev.length - 1];
-        if (last?.role === "assistant" && last.content === "") return prev.slice(0, -1);
+        if (last?.role === "assistant" && last.content.trim() === "") return prev.slice(0, -1);
         return prev;
       });
     } catch (err) {
@@ -560,8 +563,13 @@ export default function StudyPage() {
       setTutorHistory((prev) => {
         const next = [...prev];
         const last = next[next.length - 1];
-        if (last?.role === "assistant" && last.content === "") {
-          next[next.length - 1] = { ...last, content: "Sorry, something went wrong. Please try again." };
+        if (last?.role === "assistant") {
+          if (last.content === "") {
+            next[next.length - 1] = { ...last, content: "Sorry, something went wrong. Please try again." };
+          } else {
+            // Partial content received before cancel/error — mark as truncated
+            next[next.length - 1] = { ...last, content: last.content + "\n\n*(Response interrupted)*" };
+          }
         }
         return next;
       });
@@ -908,7 +916,7 @@ export default function StudyPage() {
               {/* Tutor header */}
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 shrink-0">
                 <span className="text-xs text-zinc-400">
-                  {tutorHistory.filter(m => m.content !== "").length} / {TUTOR_MAX_MESSAGES} messages
+                  {tutorHistory.filter(m => m.content.trim() !== "").length} / {TUTOR_MAX_MESSAGES} messages
                 </span>
                 <button
                   onClick={resetTutorChat}
@@ -954,7 +962,7 @@ export default function StudyPage() {
                   );
                 })}
                 {/* Typing indicator — shown before first token arrives */}
-                {isTutorStreaming && tutorHistory[tutorHistory.length - 1]?.content === "" && (
+                {isTutorStreaming && tutorHistory[tutorHistory.length - 1]?.content.trim() === "" && (
                   <div className="flex justify-start">
                     <div className="rounded-2xl rounded-bl-sm px-3 py-2 bg-zinc-100">
                       <div className="flex gap-1 items-center h-5">
@@ -970,7 +978,7 @@ export default function StudyPage() {
 
               {/* Input area */}
               <div className="border-t border-zinc-200 px-4 py-3 flex flex-col gap-2 bg-white">
-                {tutorHistory.filter(m => m.content !== "").length >= TUTOR_MAX_MESSAGES ? (
+                {tutorHistory.filter(m => m.content.trim() !== "").length >= TUTOR_MAX_MESSAGES ? (
                   <div className="flex items-center justify-between py-1">
                     <p className="text-xs text-zinc-400">Conversation limit reached.</p>
                     <button
