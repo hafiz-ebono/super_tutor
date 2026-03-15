@@ -149,9 +149,9 @@ Only elaborate if the student explicitly asks for more detail.
     try:
         researcher_tools = [TavilyTools()]
     except Exception:
-        # TAVILY_API_KEY not set — Researcher will have no tools but won't crash the factory.
-        # In production, set TAVILY_API_KEY in the environment.
-        logger.warning("TAVILY_API_KEY not set — Researcher agent will have no search tools")
+        # TAVILY_API_KEY not set or TavilyTools init failed — Researcher will have no tools
+        # but won't crash the factory. In production, set TAVILY_API_KEY in the environment.
+        logger.warning("TavilyTools init failed — Researcher will have no search tools", exc_info=True)
         researcher_tools = []
 
     researcher = Agent(

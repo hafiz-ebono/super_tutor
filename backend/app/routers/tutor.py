@@ -76,9 +76,9 @@ async def tutor_stream(session_id: str, request: Request, body: TutorStreamReque
     )
     team = build_tutor_team(**team_kwargs)
 
-    # Build fallback team if configured — used when primary is rate-limited.
+    # Fallback model is built lazily inside the rate-limit handler — not upfront.
+    # Building two full agent trees on every request is wasteful; rate-limits are rare.
     fallback_model = get_fallback_model()
-    fallback_team = build_tutor_team(**team_kwargs, model=fallback_model) if fallback_model else None
 
     logger.info(
         "Tutor stream start",
@@ -117,8 +117,8 @@ async def tutor_stream(session_id: str, request: Request, body: TutorStreamReque
             logger.info("Tutor stream done", extra={"session_id": session_id})
             yield {"event": "done", "data": json.dumps({})}
 
-        except InputCheckError as e:
-            logger.info("Topic guardrail triggered — session_id=%s message=%s", session_id, str(e)[:100])
+        except InputCheckError:
+            logger.info("Topic guardrail triggered — session_id=%s user_message=%s", session_id, body.message[:100])
             yield {
                 "event": "rejected",
                 "data": json.dumps({
@@ -132,10 +132,11 @@ async def tutor_stream(session_id: str, request: Request, body: TutorStreamReque
             else:
                 raise
         except Exception as e:
-            if is_rate_limit_error(e) and fallback_team is not None:
+            if is_rate_limit_error(e) and fallback_model is not None:
                 logger.warning(
                     "Primary model rate-limited, switching to fallback — session_id=%s", session_id
                 )
+                fallback_team = build_tutor_team(**team_kwargs, model=fallback_model)
                 yield {"event": "token", "data": json.dumps({"token": "\n*(Switching to backup model…)*\n\n"})}
                 try:
                     async for event in _stream_team(fallback_team, body.message):

@@ -124,9 +124,12 @@ export default function StudyPage() {
   const tutorMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const tutorTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Cancel any in-flight stream on unmount to release the network connection.
+  // Cancel any in-flight streams on unmount to release network connections.
   useEffect(() => {
-    return () => { readerRef.current?.cancel(); };
+    return () => {
+      readerRef.current?.cancel();
+      tutorReaderRef.current?.cancel();
+    };
   }, []);
 
   function toggleFlip(index: number) {
@@ -552,7 +555,8 @@ export default function StudyPage() {
         if (last?.role === "assistant" && last.content === "") return prev.slice(0, -1);
         return prev;
       });
-    } catch {
+    } catch (err) {
+      console.error("Tutor stream error:", err);
       setTutorHistory((prev) => {
         const next = [...prev];
         const last = next[next.length - 1];
