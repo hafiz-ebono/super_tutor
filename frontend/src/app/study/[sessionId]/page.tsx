@@ -187,7 +187,7 @@ export default function StudyPage() {
     try {
       localStorage.setItem(`tutor_intro_seen:${sessionId}`, "true");
     } catch { /* ignore */ }
-    sendTutorMessage(""); // sendTutorMessage sends sentinel string when empty — see Plan 01
+    // Intro shown statically via session.chat_intro — no backend call needed.
   }, [activeTab, session, sessionId, tutorResetId]); // tutorResetId dep triggers re-run on reset
 
   // Auto-focus textarea when chat panel opens
@@ -836,7 +836,14 @@ export default function StudyPage() {
                         <p className="text-sm text-zinc-500 mt-1">Review your answers below.</p>
                         <button
                           onClick={() => {
-                            setTutorInput(`I just completed the quiz and scored ${correctCount} out of ${session.quiz.length}.`);
+                            const wrongQuestions = session.quiz
+                              .filter((q, i) => answers[i] !== null && answers[i] !== q.answer_index)
+                              .map(q => q.question)
+                              .slice(0, 3);
+                            const wrongSummary = wrongQuestions.length > 0
+                              ? ` Questions I got wrong: ${wrongQuestions.map((q, idx) => `${idx + 1}. ${q}`).join("; ")}`
+                              : "";
+                            setTutorInput(`I just completed the quiz and scored ${correctCount} out of ${session.quiz.length}.${wrongSummary}`);
                             setActiveTab("tutor");
                           }}
                           className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"

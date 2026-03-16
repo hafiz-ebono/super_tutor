@@ -6,3 +6,4 @@ backend/tmp/
 docs/
 /.vscode
 /.planning
+/.playwright-mcp

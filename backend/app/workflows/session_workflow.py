@@ -409,9 +409,12 @@ async def title_step(step_input: StepInput, session_state: dict) -> StepOutput:
 
     logger.info("title step start", extra={"session_id": session_id, "step": "title"})
 
-    # Always compute a programmatic title first — guaranteed to succeed.
+    # Always compute a programmatic title first — intended to be guaranteed to succeed.
     # LLM is an optional enhancement: if it returns a better title, use it.
-    programmatic_title = _extract_title(source_content or notes) or "Study Session"
+    try:
+        programmatic_title = _extract_title(source_content or notes) or "Study Session"
+    except Exception:
+        programmatic_title = "Study Session"
     try:
         title = await _generate_title(source_content or notes, fallback=programmatic_title, db=traces_db)
         if not title or len(title.strip()) < 3:

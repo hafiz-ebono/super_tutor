@@ -818,7 +818,7 @@ class TestTitleStep:
         notes = "# Neural Networks Explained\nContent about neural networks."
         session_state: dict = {
             "notes": notes,
-            "source_content": "Some source content.",
+            "source_content": "",  # empty so fallback uses notes
         }
         step_input = _make_step_input({
             "session_id": "test-title-002",

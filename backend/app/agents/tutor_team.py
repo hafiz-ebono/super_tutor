@@ -58,7 +58,8 @@ TUTOR_TOKEN_EVENTS = {
     TeamRunEvent.run_content.value,               # "TeamRunContent" — coordinator prefix tokens
     TeamRunEvent.run_intermediate_content.value,  # "TeamRunIntermediateContent" — member tokens
 }
-TUTOR_ERROR_EVENT = TeamRunEvent.run_error.value  # "TeamRunError"
+TUTOR_ERROR_EVENT = TeamRunEvent.run_error.value        # "TeamRunError"
+TUTOR_COMPLETED_EVENT = TeamRunEvent.run_completed.value  # "TeamRunCompleted"
 
 
 # ---------------------------------------------------------------------------
@@ -78,8 +79,6 @@ def build_tutor_team(
     db: SqliteDb | None = None,
     session_topic: str = "",   # For TopicRelevanceGuardrail — pass source_content[:300]
     model=None,                # Override model; defaults to get_model() if None
-    quiz_score: dict | None = None,   # Latest quiz score from session state (for Advisor context)
-    focus_areas: list[str] | None = None,  # Identified weak areas from session state
 ) -> Team:
     """
     Build a fresh Agno Team for a single tutor request.
@@ -106,6 +105,7 @@ def build_tutor_team(
         ValueError: If source_content is empty after stripping. The router should have
                     already returned HTTP 422, so this is a programming-level guard.
     """
+    del tutoring_type  # reserved for future persona differentiation — accepted but not yet used
     if not source_content.strip():
         raise ValueError("source_content is required to build the tutor team")
 
@@ -115,22 +115,12 @@ def build_tutor_team(
     # Session state — seeded at construction time, persisted by Agno.
     # add_session_state_to_context=True injects a <session_state> block into the
     # system message of the coordinator AND every dispatched member agent.
-    #
-    # source_material / session_notes: static per session, always safe to seed.
-    # quiz_score / focus_areas: loaded fresh from the workflow session on every
-    # request in tutor.py, so construction-time values always reflect the latest
-    # known state. The Advisor reads these from its injected context and reasons
-    # naturally — no pre-computed directives needed.
     # ------------------------------------------------------------------
     _topic_name = source_content.split("\n")[0].strip().lstrip("#").strip() or "this material"
 
     team_session_state: dict = {"source_material": source_content}
     if notes.strip():
         team_session_state["session_notes"] = notes
-    if quiz_score:
-        team_session_state["quiz_score"] = quiz_score
-    if focus_areas:
-        team_session_state["focus_areas"] = focus_areas
 
     # Instantiate guardrail with session topic context
     topic_guardrail = TopicRelevanceGuardrail(
