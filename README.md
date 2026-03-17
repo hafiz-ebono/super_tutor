@@ -1,8 +1,8 @@
 # Super Tutor
 
-**AI-powered study companion** — turn any article URL, pasted text, uploaded document (PDF/DOCX), or topic description into structured study notes, interactive flashcards, a quiz, and a grounded chat tutor — all tailored to your learning style.
+**AI-powered study companion** — turn any article URL, pasted text, uploaded document (PDF/DOCX), or topic description into structured study notes, interactive flashcards, a quiz, and a personal AI tutor — all tailored to your learning style.
 
-Super Tutor is a full-stack agentic application built on [Agno](https://app.agno.com). You feed it any source of knowledge and it spins up a complete study session: persona-adapted notes, on-demand flashcards and quizzes, and a session-scoped chat agent that answers questions strictly from the material — no hallucinated outside knowledge. Conversation history is persisted to SQLite so the chat tutor remembers earlier questions across browser refreshes.
+Super Tutor is a full-stack agentic application built on [Agno](https://app.agno.com). You feed it any source of knowledge and it spins up a complete study session: persona-adapted notes, on-demand flashcards and quizzes, and a dedicated **Personal Tutor** tab backed by a 5-specialist Agno Team — no hallucinated outside knowledge. Conversation history is persisted to SQLite so the tutor remembers earlier questions across browser refreshes.
 
 #### Links :
 - Frontend : https://super-tutor.vercel.app/
@@ -16,7 +16,12 @@ Super Tutor is a full-stack agentic application built on [Agno](https://app.agno
 2. The backend extracts content (fetches the URL, reads the document, or researches the topic via Tavily web search)
 3. A **Notes Agent** produces comprehensive, persona-adapted study notes
 4. On demand, a **Flashcard Agent** and **Quiz Agent** generate interactive study materials
-5. A **Chat Agent** lets you ask questions about the session — grounded strictly in the session material, with full conversation memory persisted across refreshes
+5. A **Personal Tutor** tab provides a persistent multi-turn AI tutor backed by a 5-specialist Agno Team:
+   - **Explainer** — answers questions grounded in the session material
+   - **QuizMaster** — delivers one MCQ at a time, evaluates answers, tracks progress
+   - **ContentWriter** — generates inline flashcards, notes, and quiz questions in chat
+   - **Advisor** — gives personalised progress summaries and focus suggestions
+   - **Researcher** — extends topics with live Tavily web search when you want to go deeper
 
 ---
 
@@ -32,16 +37,18 @@ Super Tutor is a full-stack agentic application built on [Agno](https://app.agno
 ┌───────────────────────────▼─────────────────────────────┐
 │              FastAPI Backend (Agno + AgentOS)             │
 │                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │ /sessions    │  │ /sessions    │  │ /chat/stream  │  │
-│  │ router       │  │ /upload      │  │ router        │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬────────┘  │
-│         │                 │                  │            │
-│  ┌──────▼─────────────────▼──────────────────▼────────┐  │
-│  │           5 Agno Agents (per-request)               │  │
-│  │  NotesAgent · ChatAgent · FlashcardAgent            │  │
-│  │  QuizAgent  · ResearchAgent                         │  │
-│  └─────────────────────────────────────────────────────┘  │
+│  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
+│  │ /sessions│  │ /sessions│  │/chat      │  │ /tutor  │  │
+│  │ router   │  │ /upload  │  │/stream    │  │/{id}/   │  │
+│  └────┬─────┘  └────┬─────┘  └─────┬─────┘  │stream   │  │
+│       │              │              │         └────┬────┘  │
+│  ┌────▼──────────────▼──────────────▼──────────────▼────┐  │
+│  │              Agno Agents + Teams (per-request)        │  │
+│  │  NotesAgent · ChatAgent · FlashcardAgent              │  │
+│  │  QuizAgent  · ResearchAgent                           │  │
+│  │  TutorTeam (Explainer · QuizMaster · ContentWriter    │  │
+│  │             Advisor  · Researcher)                    │  │
+│  └───────────────────────────────────────────────────────┘  │
 │         │                                                │
 │  ┌──────▼──────────────────────┐                        │
 │  │  AI Provider (configurable) │                        │
@@ -123,7 +130,7 @@ Both use the stored source content + tutoring type loaded from SQLite to produce
 
 ## In-Session Chat Agent
 
-The **ChatAgent** is a persistent tutoring assistant scoped to a single study session.
+The **ChatAgent** is a lightweight single-agent Q&A assistant scoped to a single study session.
 
 ```
 POST /chat/stream   → Server-Sent Events stream of the assistant reply
@@ -139,18 +146,47 @@ Key properties:
 | **Persistent memory** | Conversation history stored in SQLite via Agno and replayed by the agent on every request |
 | **Resettable** | Client can send a `chat_reset_id` to start a fresh conversation while keeping the session data intact |
 | **Stateless construction** | A fresh agent object is built per request; the DB provides continuity, so no server-side session state is needed |
-| **Guardrailed** | Same prompt-injection pre-hook and substantive-output post-hook as all other agents |
+| **Guardrailed** | Prompt-injection pre-hook and substantive-output post-hook |
+
+---
+
+## Personal Tutor (Agno Team)
+
+The **Personal Tutor** tab is backed by a 5-member Agno Team operating in `route` mode — the coordinator silently delegates each message to exactly one specialist.
+
+```
+POST /tutor/{session_id}/stream   → Server-Sent Events stream of the specialist's reply
+```
+
+| Specialist | Role |
+|------------|------|
+| **Explainer** | Answers questions grounded strictly in session material |
+| **QuizMaster** | Delivers one MCQ at a time; evaluates typed answers; tracks session progress from conversation history |
+| **ContentWriter** | Generates inline flashcards (markdown table), notes excerpts, and quiz questions from session material |
+| **Advisor** | Reads conversation history to surface personalised progress summaries and focus suggestions |
+| **Researcher** | Extends topics with live Tavily web search when the student wants external context |
+
+Key properties:
+
+| Property | Behaviour |
+|----------|-----------|
+| **Route mode** | Coordinator delegates to exactly one specialist per message — no synthesis step |
+| **Topic guardrail** | `TopicRelevanceGuardrail` pre-hook rejects off-topic messages before LLM dispatch |
+| **Server-side context** | `source_content` and `notes` loaded from SQLite — client sends only `{message, tutoring_type, session_id}` |
+| **Persistent history** | Team conversation stored in SQLite under namespace `tutor:{session_id}:{reset_id}` |
+| **Resettable** | `tutor_reset_id` field starts a fresh conversation without deleting existing history rows |
+| **Fallback model** | On provider rate-limit, switches to `AGENT_FALLBACK_MODEL` transparently |
 
 ---
 
 ## Security: Guardrails
 
-Every agent has two guardrails applied via Agno hooks:
-
-| Hook | Type | What It Does |
-|------|------|-------------|
-| `PromptInjectionGuardrail` | pre-hook | Blocks injection attempts before the LLM sees input |
-| `validate_substantive_output` | post-hook | Rejects empty or suspiciously short responses |
+| Guardrail | Scope | Hook Type | What It Does |
+|-----------|-------|-----------|-------------|
+| `PromptInjectionGuardrail` | All agents | pre-hook | Blocks injection attempts before the LLM sees input |
+| `validate_substantive_output` | All agents | post-hook | Rejects empty or suspiciously short responses |
+| `TopicRelevanceGuardrail` | TutorTeam | pre-hook (Team) | Rejects off-topic messages before coordinator dispatch, using session content as judge context |
+| `validate_team_output` | TutorTeam | post-hook (Team) | Rejects empty or short Team responses after the full run completes |
 
 ---
 
@@ -170,9 +206,9 @@ The FastAPI app is wrapped with **AgentOS** at startup:
 super_tutor/
 ├── backend/            # FastAPI + Agno Python backend
 │   ├── app/
-│   │   ├── agents/     # 5 AI agents + guardrails + personas + model_factory
+│   │   ├── agents/     # Agents + TutorTeam + guardrails + personas + model_factory
 │   │   ├── workflows/  # Session workflow (notes pipeline)
-│   │   ├── routers/    # /sessions, /sessions/upload, and /chat endpoints
+│   │   ├── routers/    # /sessions, /sessions/upload, /chat, and /tutor endpoints
 │   │   ├── extraction/ # URL extraction (trafilatura), document extraction (pypdf/docx), text cleaner
 │   │   ├── models/     # Pydantic request/response models
 │   │   ├── utils/      # Session status store + logging helpers
@@ -264,14 +300,16 @@ Open `http://localhost:3000`.
 | `AGENT_PROVIDER` | `openai` | AI provider (`openai` / `anthropic` / `groq` / `openrouter`) |
 | `AGENT_MODEL` | `gpt-4o` | Model ID for the chosen provider |
 | `AGENT_API_KEY` | *(required)* | API key for the provider |
-| `AGENT_FALLBACK_PROVIDER` | `""` | Optional fallback provider on retry |
+| `AGENT_FALLBACK_PROVIDER` | `""` | Optional fallback provider on rate-limit retry |
 | `AGENT_FALLBACK_MODEL` | `""` | Optional fallback model ID on retry |
 | `AGENT_FALLBACK_API_KEY` | `""` | API key for fallback provider (defaults to `AGENT_API_KEY`) |
 | `AGENT_MAX_RETRIES` | `3` | Max retry attempts per agent call |
 | `TRACE_DB_PATH` | `tmp/super_tutor_traces.db` | SQLite path for AgentOS traces + workflow session state |
 | `SESSION_DB_PATH` | `tmp/super_tutor_sessions.db` | SQLite path for session lifecycle status |
 | `ALLOWED_ORIGINS` | `http://localhost:3000` | CORS origins (comma-separated or JSON array) |
-| `TAVILY_API_KEY` | *(optional)* | Required for topic-mode research sessions |
+| `TAVILY_API_KEY` | *(optional)* | Required for topic-mode research and Researcher specialist |
+| `TUTOR_HISTORY_WINDOW` | `10` | Number of past Team runs included in tutor conversation context |
+| `AGNO_TELEMETRY` | *(unset)* | Set to `false` to disable Agno telemetry |
 
 ---
 

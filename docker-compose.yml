@@ -2,6 +2,7 @@ services:
   backend:
     build:
       context: ./backend
+    image: super_tutor_backend
     ports:
       - "8000:8000"
     volumes:
@@ -14,6 +15,7 @@ services:
   frontend:
     build:
       context: ./frontend
+    image: super_tutor_frontend
     ports:
       - "3000:3000"
     volumes:

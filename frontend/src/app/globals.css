@@ -83,6 +83,32 @@ body {
   margin: 1rem 0;
 }
 
+/* Markdown tables in prose — required for ContentWriter flashcard output (CONTENT-02) */
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid #e4e4e7;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  color: #3f3f46;
+}
+
+.prose th {
+  background: #f4f4f5;
+  font-weight: 600;
+  color: #18181b;
+}
+
+.prose tr:nth-child(even) {
+  background: #fafafa;
+}
+
 /* ─── Flashcard flip ─────────────────────────────────────────────── */
 .flashcard-scene {
   perspective: 800px;

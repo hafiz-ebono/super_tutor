@@ -63,6 +63,7 @@ async def lifespan(app: FastAPI):
 from app.routers import sessions
 from app.routers import chat
 from app.routers import upload as upload_router
+from app.routers import tutor as tutor_router
 
 app = FastAPI(
     title="Super Tutor API",
@@ -87,6 +88,7 @@ app.add_middleware(
 app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(upload_router.router, prefix="/sessions", tags=["sessions"])
+app.include_router(tutor_router.router, prefix="/tutor", tags=["tutor"])
 
 
 @app.get("/health")
@@ -120,7 +122,13 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
     The session workflow is registered in workflows=[] so it appears in the
     AgentOS playground. This representative instance (all steps enabled) is
     for UI visibility only — per-request instances are created inside routers.
+
+    TutorTeam (Phase 14+) is now registered via teams=[placeholder_team] so it
+    is visible in the AgentOS control plane playground UI alongside all other
+    agents. Per-request Team instances continue to be created in the tutor
+    router at request time with db= injection for tracing.
     """
+    from app.agents.tutor_team import build_tutor_team
     traces_db = _traces_db  # reuse the single shared instance
     session_workflow = build_session_workflow(
         session_id="playground",
@@ -128,6 +136,13 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
         session_type="topic",
         generate_flashcards=True,
         generate_quiz=True,
+    )
+    placeholder_team = build_tutor_team(
+        source_content="[AgentOS placeholder — not a real session]",
+        notes="",
+        tutoring_type="micro_learning",
+        db=traces_db,
+        session_topic="[placeholder]",
     )
     agent_os = AgentOS(
         agents=[
@@ -138,6 +153,7 @@ def _wrap_with_agentos(fastapi_app: FastAPI) -> FastAPI:
             build_research_agent(db=traces_db),
         ],
         workflows=[session_workflow],
+        teams=[placeholder_team],
         base_app=fastapi_app,
         db=traces_db,
         tracing=True,

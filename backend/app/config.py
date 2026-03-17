@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import List, Any
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     agent_provider: str = "openai"     # openai | anthropic | groq | openrouter
     agent_model: str = "gpt-4o"        # model ID valid for chosen provider
     agent_api_key: str = ""            # single key for whichever provider is active
+    agent_base_url: str = ""           # optional base URL override for OpenAI-compatible providers
     agent_fallback_provider: str = "" # fallback provider (if different from primary, e.g. "openrouter")
     agent_fallback_model: str = ""     # optional fallback model ID
     agent_fallback_api_key: str = ""  # fallback API key (if different provider; defaults to agent_api_key)
@@ -40,6 +41,11 @@ class Settings(BaseSettings):
     # Chat
     chat_history_window: int = 20                # past turns included in context; override with CHAT_HISTORY_WINDOW
 
+    # Tutor
+    tutor_history_window: int = 10               # past Team runs included in tutor context; override with TUTOR_HISTORY_WINDOW
+    rate_limit_tutor: str = "60/minute"          # per-IP limit for POST /tutor/{session_id}/stream
+    debug: bool = False                          # enable agno Team debug_mode; override with DEBUG=true
+
     # CORS
     allowed_origins: List[str] | str = ["http://localhost:3000"]
 
@@ -55,6 +61,17 @@ class Settings(BaseSettings):
                     pass
             return [i.strip() for i in v.split(",")]
         return v
+
+    @model_validator(mode="after")
+    def warn_if_api_key_missing(self) -> "Settings":
+        local_providers = {"local", "ollama", "llamacpp"}
+        if self.agent_provider not in local_providers and not self.agent_api_key:
+            import logging
+            logging.getLogger("super_tutor.config").warning(
+                "agent_api_key is not set for provider '%s' — LLM calls will fail at runtime",
+                self.agent_provider,
+            )
+        return self
 
 
 @lru_cache()

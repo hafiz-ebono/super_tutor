@@ -1,6 +1,6 @@
 # Super Tutor — Backend
 
-FastAPI + [Agno](https://docs.agno.com) backend that powers the Super Tutor study session pipeline. Provides SSE-streaming endpoints for session creation, file upload, and real-time chat, backed by five AI agents, a workflow engine, and SQLite-based tracing.
+FastAPI + [Agno](https://docs.agno.com) backend that powers the Super Tutor study session pipeline. Provides SSE-streaming endpoints for session creation, file upload, chat, and a Personal Tutor, backed by five AI agents, an Agno Team, a workflow engine, and SQLite-based tracing.
 
 ---
 
@@ -25,15 +25,17 @@ FastAPI + [Agno](https://docs.agno.com) backend that powers the Super Tutor stud
 ```
 backend/
 ├── app/
-│   ├── main.py              # FastAPI app factory + AgentOS wrapper
+│   ├── main.py              # FastAPI app factory + AgentOS wrapper + rate limiter setup
 │   ├── config.py            # Settings (env-driven via pydantic-settings)
+│   ├── dependencies.py      # Shared DI: get_traces_db, limiter, ACTIVE_TASKS
 │   ├── agents/
 │   │   ├── notes_agent.py       # NotesAgent — comprehensive study notes
 │   │   ├── chat_agent.py        # ChatAgent — grounded Q&A on session notes
 │   │   ├── flashcard_agent.py   # FlashcardAgent — JSON flashcard generation
 │   │   ├── quiz_agent.py        # QuizAgent — JSON multiple-choice quiz
 │   │   ├── research_agent.py    # ResearchAgent — Tavily web search + synthesis
-│   │   ├── guardrails.py        # Shared pre/post hooks for all agents
+│   │   ├── tutor_team.py        # TutorTeam — 5-specialist Agno Team (route mode)
+│   │   ├── guardrails.py        # Pre/post hooks: PromptInjection, TopicRelevance, validate_team_output
 │   │   ├── model_factory.py     # Provider-agnostic model resolver
 │   │   └── personas.py          # Persona strings for tutoring modes
 │   ├── workflows/
@@ -41,7 +43,8 @@ backend/
 │   ├── routers/
 │   │   ├── sessions.py          # POST /sessions, GET /sessions/{id}, POST /sessions/{id}/regenerate/{section}
 │   │   ├── upload.py            # POST /sessions/upload (PDF/DOCX file upload)
-│   │   └── chat.py              # POST /chat/stream
+│   │   ├── chat.py              # POST /chat/stream (single-agent floating chat)
+│   │   └── tutor.py             # POST /tutor/{session_id}/stream (TutorTeam SSE)
 │   ├── extraction/
 │   │   ├── chain.py                  # extract_content() orchestrator + ExtractionError
 │   │   ├── trafilatura_extractor.py  # trafilatura fetch wrapper
@@ -49,7 +52,8 @@ backend/
 │   │   └── cleaner.py                # Text normalisation shared by all extractors
 │   ├── models/
 │   │   ├── session.py           # SessionRequest Pydantic model
-│   │   └── chat.py              # ChatStreamRequest Pydantic model
+│   │   ├── chat.py              # ChatStreamRequest Pydantic model
+│   │   └── tutor.py             # TutorStreamRequest Pydantic model
 │   └── utils/
 │       ├── session_status.py    # In-process session status store (create/update/get)
 │       └── logging.py           # Structured logging helpers
@@ -67,7 +71,7 @@ backend/
 
 ### Architecture: All Agents
 
-Every agent is built by a `build_*` factory function — a new instance is constructed per request, never reused. All five agents share the same guardrails:
+Every agent is built by a `build_*` factory function — a new instance is constructed per request, never reused. All agents share prompt-injection guardrails:
 
 ```mermaid
 flowchart LR
@@ -147,7 +151,41 @@ Researches a topic using Tavily web search and synthesizes findings into educati
 
 - Runs 2–3 targeted searches with different query angles
 - Returns `{"content": "<600+ word prose>", "sources": ["url1", ...]}`
-- Used exclusively for topic-mode sessions
+- Used for topic-mode session creation and as the **Researcher** specialist inside TutorTeam
+
+---
+
+### TutorTeam
+
+**File:** `app/agents/tutor_team.py`
+
+A 5-member Agno Team operating in `TeamMode.route`. The coordinator silently delegates each message to exactly one specialist — no synthesis or coordinator commentary is added.
+
+```mermaid
+flowchart LR
+    Message --> TopicRelevanceGuardrail
+    TopicRelevanceGuardrail --> Coordinator
+    Coordinator -- route --> Explainer
+    Coordinator -- route --> QuizMaster
+    Coordinator -- route --> ContentWriter
+    Coordinator -- route --> Advisor
+    Coordinator -- route --> Researcher
+    Explainer & QuizMaster & ContentWriter & Advisor & Researcher --> validate_team_output
+    validate_team_output --> SSE
+```
+
+| Specialist | When dispatched |
+|------------|----------------|
+| **Explainer** | Questions about session material, greetings, clarification requests |
+| **QuizMaster** | "Quiz me", MCQ answers, quiz tab score sharing |
+| **ContentWriter** | Flashcard/notes/quiz generation requests in chat |
+| **Advisor** | Progress questions ("how am I doing?", "what should I focus on?") |
+| **Researcher** | Requests to go deeper or find external information |
+
+**Key design decisions:**
+- `session_state` seeded with `source_content` + `notes` at construction; `add_session_state_to_context=True` injects a `<session_state>` block into every specialist's system message
+- Conversation history lives at the Team level only — member agents have no `db=` parameter to avoid duplicate SQLite rows
+- Team session namespace: `tutor:{session_id}:{tutor_reset_id}` — separate from workflow session rows
 
 ---
 
@@ -239,14 +277,37 @@ After validation passes, the router streams the same SSE events as the sessions 
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/chat/stream` | SSE token stream for a single chat turn |
+| `POST` | `/chat/stream` | SSE token stream for a single chat turn (floating panel) |
 
 - Accepts `{message, tutoring_type, session_id, chat_reset_id?}`
 - **Notes are loaded server-side from SQLite** using `session_id` — the client does not send notes
 - Builds a new `ChatAgent` per request with notes injected into the system prompt
-- `chat_reset_id`: optional field; when provided, appended to the Agno session key so the agent starts a fresh conversation history (used by the "reset chat" button on the frontend)
-- Streams tokens as `event: token` SSE events
-- Terminates with `event: done`
+- `chat_reset_id`: optional field; when provided, appended to the Agno session key so the agent starts a fresh conversation history
+- Streams tokens as `event: token` SSE events; terminates with `event: done`
+
+---
+
+### Tutor Router — `app/routers/tutor.py`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/tutor/{session_id}/stream` | SSE token stream from the 5-specialist TutorTeam |
+
+- Accepts `{message, tutoring_type, session_id, tutor_reset_id}`
+- **`source_content` and `notes` are loaded from SQLite** using `session_id` (the same workflow session row written at session creation)
+- Builds a `TutorTeam` per request; session namespace: `tutor:{session_id}:{tutor_reset_id}`
+- Rate-limited at `RATE_LIMIT_TUTOR` (default 60/minute per IP) via `slowapi`
+- Handles fallback model automatically on provider rate-limit errors
+
+#### SSE Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `stream_start` | `{}` | Stream opened |
+| `token` | `{token: string}` | Content token from the active specialist |
+| `done` | `{}` | Specialist response complete |
+| `rejected` | `{reason: string}` | Off-topic message blocked by `TopicRelevanceGuardrail` |
+| `error` | `{error: string}` | Unrecoverable error (both primary and fallback failed) |
 
 ---
 
@@ -295,10 +356,12 @@ Shared normalisation step applied after both URL and document extraction:
 
 **File:** `app/agents/guardrails.py`
 
-| Guardrail | Hook Type | Behaviour |
-|-----------|-----------|-----------|
-| `PromptInjectionGuardrail` | pre-hook | Raises `InputCheckError` if injection patterns detected; caught at router level and returned as user-friendly error |
-| `validate_substantive_output` | post-hook | Raises `OutputCheckError` if response is < 20 characters |
+| Guardrail | Scope | Hook Type | Behaviour |
+|-----------|-------|-----------|-----------|
+| `PromptInjectionGuardrail` | All agents | pre-hook | Raises `InputCheckError` if injection patterns detected |
+| `validate_substantive_output` | All agents | post-hook | Raises `OutputCheckError` if response is < 20 characters |
+| `TopicRelevanceGuardrail` | TutorTeam | pre-hook (Team) | Uses an LLM judge to reject messages unrelated to the session topic; emits `TeamRunError` which the router converts to a `rejected` SSE event |
+| `validate_team_output` | TutorTeam | post-hook (Team) | Raises `OutputCheckError` if the full Team response is empty or < 20 characters |
 
 ---
 
@@ -333,12 +396,16 @@ All settings are read from `.env` via `pydantic-settings`:
 | `AGENT_PROVIDER` | `openai` | `openai` / `anthropic` / `groq` / `openrouter` |
 | `AGENT_MODEL` | `gpt-4o` | Model ID for the chosen provider |
 | `AGENT_API_KEY` | *(required)* | API key for the provider |
-| `AGENT_FALLBACK_MODEL` | `""` | Optional fallback model on retry |
+| `AGENT_FALLBACK_PROVIDER` | `""` | Optional fallback provider on rate-limit retry |
+| `AGENT_FALLBACK_MODEL` | `""` | Optional fallback model ID on retry |
+| `AGENT_FALLBACK_API_KEY` | `""` | API key for fallback provider (defaults to `AGENT_API_KEY`) |
 | `AGENT_MAX_RETRIES` | `3` | Max retry attempts per agent call |
 | `TRACE_DB_PATH` | `tmp/super_tutor_traces.db` | SQLite path for agent traces + workflow session state |
 | `SESSION_DB_PATH` | `tmp/super_tutor_sessions.db` | SQLite path for session lifecycle status |
 | `ALLOWED_ORIGINS` | `http://localhost:3000` | CORS origins (comma-separated or JSON array) |
-| `TAVILY_API_KEY` | *(optional)* | Required for topic-mode research sessions |
+| `TAVILY_API_KEY` | *(optional)* | Required for topic-mode research and TutorTeam Researcher specialist |
+| `TUTOR_HISTORY_WINDOW` | `10` | Past Team runs included in tutor conversation context |
+| `AGNO_TELEMETRY` | *(unset)* | Set to `false` to disable Agno telemetry |
 
 ---
 

@@ -1,6 +1,6 @@
 # Super Tutor — Frontend
 
-Next.js 14 (App Router) frontend for Super Tutor. Provides the session creation form (URL, topic, paste, or file upload), a real-time SSE progress screen, and an interactive study view with notes, flashcards, quiz, and a grounded chat panel.
+Next.js 14 (App Router) frontend for Super Tutor. Provides the session creation form (URL, topic, paste, or file upload), a real-time SSE progress screen, and an interactive study view with notes, flashcards, quiz, a grounded chat panel, and a Personal Tutor tab backed by a 5-specialist Agno Team.
 
 ---
 
@@ -137,8 +137,9 @@ flowchart TD
 | **Notes** | Markdown rendered with `react-markdown` | Generated during session creation |
 | **Flashcards** | Flip-card grid (8–12 cards) | On-demand via `POST /sessions/{id}/regenerate/flashcards` |
 | **Quiz** | Multiple-choice, question-by-question, then review | On-demand via `POST /sessions/{id}/regenerate/quiz` |
+| **Tutor** | Persistent multi-turn chat with a 5-specialist Agno Team | Live via `POST /tutor/{id}/stream` |
 
-#### Chat Panel
+#### Chat Panel (floating)
 
 - Floating button (bottom-right) toggles a slide-in panel
 - Opens with a persona-adapted greeting (`chat_intro` from `SessionResult`)
@@ -146,6 +147,16 @@ flowchart TD
 - Sends only `{message, tutoring_type, session_id, chat_reset_id?}` — notes are loaded server-side from SQLite, not sent by the client
 - "Reset chat" button generates a new `chat_reset_id` (UUID) so the backend starts a fresh conversation history
 - Chat history is persisted to `localStorage` as `chat:{sessionId}` and displayed client-side
+
+#### Tutor Tab
+
+- Dedicated full-panel chat interface (not the floating bubble)
+- Streams tokens from `POST /tutor/{session_id}/stream` using `ReadableStream` + `TextDecoder`
+- Sends only `{message, tutoring_type, session_id, tutor_reset_id}` — source content and notes are loaded server-side
+- Auto-triggers an introduction message on first open (fires once per session, tracked via `tutor_intro_seen:{sessionId}` in `localStorage`)
+- `tutor_reset_id` is persisted in `localStorage` (`tutor_reset_id:{sessionId}`); changing it starts a fresh conversation in SQLite without losing old history rows
+- Tutor history is persisted to `localStorage` as `tutor_history:{sessionId}`
+- Handles SSE events: `stream_start`, `token`, `done`, `rejected` (off-topic guardrail), `error`
 
 ---
 
@@ -176,9 +187,12 @@ There is no global state library. State lives in:
 | Store | Contents | TTL |
 |-------|----------|-----|
 | `localStorage: session:{id}` | Full `SessionResult` | Until cleared by browser / user |
-| `localStorage: chat:{id}` | Chat history array (display only) | Until cleared by browser / user |
+| `localStorage: chat:{id}` | Floating chat history array (display only) | Until cleared by browser / user |
+| `localStorage: tutor_history:{id}` | Tutor tab conversation history | Until cleared by browser / user |
+| `localStorage: tutor_reset_id:{id}` | Active `tutor_reset_id` for conversation namespacing | Until cleared by browser / user |
+| `localStorage: tutor_intro_seen:{id}` | Whether the auto-intro has fired for this session | Until cleared by browser / user |
 | `localStorage: super_tutor_recent_sessions` | Last 5 session stubs | Managed by `useRecentSessions` hook |
-| React `useState` | UI-only state (active tab, quiz phase, chat open) | Page lifetime |
+| React `useState` | UI-only state (active tab, quiz phase, chat open, tutor streaming) | Page lifetime |
 
 ### useRecentSessions Hook
 

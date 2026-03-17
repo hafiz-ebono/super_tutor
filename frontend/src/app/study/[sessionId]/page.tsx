@@ -13,7 +13,7 @@ const MODE_LABELS: Record<TutoringType, string> = {
   advanced: "Advanced",
 };
 
-type Tab = "notes" | "flashcards" | "quiz";
+type Tab = "notes" | "flashcards" | "quiz" | "tutor";
 
 const TAB_ICONS: Record<Tab, React.ReactNode> = {
   notes: (
@@ -34,6 +34,19 @@ const TAB_ICONS: Record<Tab, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 17h.01" />
     </svg>
   ),
+  tutor: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5 shrink-0">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+    </svg>
+  ),
+};
+
+const TAB_LABELS: Record<Tab, string> = {
+  notes: "Notes",
+  flashcards: "Flashcards",
+  quiz: "Quiz",
+  tutor: "Tutor",
 };
 
 export default function StudyPage() {
@@ -58,6 +71,7 @@ export default function StudyPage() {
   const { saveSession, evictionToast } = useRecentSessions();
 
   const MAX_MESSAGES = 20; // 10 user + 10 assistant exchanges
+  const TUTOR_MAX_MESSAGES = 50; // 25 user + 25 assistant exchanges
 
   const [chatOpen, setChatOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; content: string }[]>(() => {
@@ -82,9 +96,40 @@ export default function StudyPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
-  // Cancel any in-flight stream on unmount to release the network connection.
+  // Tutor tab state — independent of existing floating chat panel
+  const [tutorHistory, setTutorHistory] = useState<{ role: "user" | "assistant"; content: string }[]>(() => {
+    try {
+      const stored = localStorage.getItem(`tutor_history:${sessionId}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [tutorIntroSeen, setTutorIntroSeen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(`tutor_intro_seen:${sessionId}`) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const [isTutorStreaming, setIsTutorStreaming] = useState(false);
+  const [tutorInput, setTutorInput] = useState("");
+  const [tutorResetId, setTutorResetId] = useState<string>(() => {
+    try { return localStorage.getItem(`tutor_reset_id:${sessionId}`) ?? "v0"; } catch { return "v0"; }
+  });
+  const tutorReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const tutorIntroTriggeredRef = useRef(false);
+  const tutorMessagesEndRef = useRef<HTMLDivElement | null>(null);
+  const tutorTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Cancel any in-flight streams on unmount to release network connections.
   useEffect(() => {
-    return () => { readerRef.current?.cancel(); };
+    return () => {
+      readerRef.current?.cancel();
+      tutorReaderRef.current?.cancel();
+    };
   }, []);
 
   function toggleFlip(index: number) {
@@ -103,6 +148,16 @@ export default function StudyPage() {
     }
   }, [chatHistory, sessionId]);
 
+  // Persist tutor history to localStorage whenever it changes (skip during streaming)
+  useEffect(() => {
+    if (isTutorStreaming) return; // wait until turn is complete
+    if (tutorHistory.length > 0) {
+      try {
+        localStorage.setItem(`tutor_history:${sessionId}`, JSON.stringify(tutorHistory));
+      } catch { /* ignore quota errors */ }
+    }
+  }, [tutorHistory, sessionId, isTutorStreaming]);
+
   useEffect(() => {
     try {
       localStorage.setItem(`chat_reset_id:${sessionId}`, chatResetId);
@@ -115,6 +170,25 @@ export default function StudyPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
+
+  // Auto-scroll tutor chat to bottom when tutorHistory changes
+  useEffect(() => {
+    tutorMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [tutorHistory]);
+
+  // Intro auto-trigger — fires once when Tutor tab is first opened with no history
+  useEffect(() => {
+    if (activeTab !== "tutor") return;
+    if (tutorIntroSeen || tutorHistory.length > 0) return;
+    if (!session || isTutorStreaming) return;
+    if (tutorIntroTriggeredRef.current) return; // sync guard against double-trigger on re-render
+    tutorIntroTriggeredRef.current = true;
+    setTutorIntroSeen(true);
+    try {
+      localStorage.setItem(`tutor_intro_seen:${sessionId}`, "true");
+    } catch { /* ignore */ }
+    // Intro shown statically via session.chat_intro — no backend call needed.
+  }, [activeTab, session, sessionId, tutorResetId]); // tutorResetId dep triggers re-run on reset
 
   // Auto-focus textarea when chat panel opens
   useEffect(() => {
@@ -282,6 +356,25 @@ export default function StudyPage() {
     }
   }
 
+  function resetTutorChat() {
+    // Cancel any in-flight stream so isTutorStreaming doesn't block the intro re-trigger
+    tutorReaderRef.current?.cancel();
+    tutorReaderRef.current = null;
+    setIsTutorStreaming(false);
+    const newResetId = `v${Date.now()}`;
+    setTutorResetId(newResetId);
+    setTutorHistory([]);
+    setTutorIntroSeen(false);
+    tutorIntroTriggeredRef.current = false;
+    try {
+      localStorage.setItem(`tutor_reset_id:${sessionId}`, newResetId);
+      localStorage.removeItem(`tutor_history:${sessionId}`);
+      localStorage.removeItem(`tutor_intro_seen:${sessionId}`);
+    } catch {
+      // ignore
+    }
+  }
+
   async function sendMessage() {
     if (!session || !chatInput.trim() || isStreaming) return;
     const userMessage = chatInput.trim();
@@ -385,6 +478,111 @@ export default function StudyPage() {
     }
   }
 
+  async function sendTutorMessage(userMessage: string) {
+    if (!session || isTutorStreaming) return;
+    setTutorHistory((prev) => {
+      const next = userMessage.trim()
+        ? [...prev, { role: "user" as const, content: userMessage.trim() }]
+        : [...prev];
+      return [...next, { role: "assistant" as const, content: "" }];
+    });
+    setIsTutorStreaming(true);
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tutor/${sessionId}/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMessage.trim() || "Hello! Please introduce yourself and your capabilities.",
+          tutoring_type: session.tutoring_type,
+          session_id: sessionId,
+          tutor_reset_id: tutorResetId,
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error("Tutor stream failed");
+
+      const reader = res.body.getReader();
+      tutorReaderRef.current = reader;
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+          try {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed.token === "string") {
+              setTutorHistory((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "assistant") {
+                  next[next.length - 1] = { ...last, content: last.content + parsed.token };
+                }
+                return next;
+              });
+            } else if (typeof parsed.error === "string") {
+              setTutorHistory((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "assistant") {
+                  next[next.length - 1] = { ...last, content: parsed.error };
+                }
+                return next;
+              });
+              setIsTutorStreaming(false);
+              return;
+            } else if (typeof parsed.reason === "string") {
+              // GUARD-01 rejection — friendly redirect from TopicRelevanceGuardrail
+              setTutorHistory((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "assistant") {
+                  next[next.length - 1] = { ...last, content: parsed.reason };
+                }
+                return next;
+              });
+              setIsTutorStreaming(false);
+              return;
+            }
+          } catch { /* non-JSON line — ignore */ }
+        }
+      }
+      // Remove empty assistant bubble if stream completed without content
+      setTutorHistory((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && last.content.trim() === "") return prev.slice(0, -1);
+        return prev;
+      });
+    } catch (err) {
+      console.error("Tutor stream error:", err);
+      setTutorHistory((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === "assistant") {
+          if (last.content === "") {
+            next[next.length - 1] = { ...last, content: "Sorry, something went wrong. Please try again." };
+          } else {
+            // Partial content received before cancel/error — mark as truncated
+            next[next.length - 1] = { ...last, content: last.content + "\n\n*(Response interrupted)*" };
+          }
+        }
+        return next;
+      });
+    } finally {
+      tutorReaderRef.current = null;
+      setIsTutorStreaming(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="flex items-center justify-center min-h-[80vh]">
@@ -428,18 +626,18 @@ export default function StudyPage() {
         </div>
 
         <nav className="flex flex-col gap-0.5">
-          {(["notes", "flashcards", "quiz"] as Tab[]).map((tab) => (
+          {(["notes", "flashcards", "quiz", "tutor"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex items-center gap-2.5 w-full text-left px-2 py-2 rounded-lg text-sm capitalize transition-colors ${
+              className={`flex items-center gap-2.5 w-full text-left px-2 py-2 rounded-lg text-sm transition-colors ${
                 activeTab === tab
                   ? "bg-zinc-100 text-zinc-900 font-medium"
                   : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
               }`}
             >
               {TAB_ICONS[tab]}
-              {tab}
+              {tab === "tutor" ? "Personal Tutor" : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </nav>
@@ -468,7 +666,7 @@ export default function StudyPage() {
         </div>
 
         {/* Main content */}
-        <main className={`flex-1 px-6 py-8 md:pb-8 pb-24 transition-all duration-300 ${chatOpen ? "lg:mr-[360px]" : ""}`}>
+        <main className={`flex-1 transition-all duration-300 ${activeTab === "tutor" ? "flex flex-col overflow-hidden" : "px-6 py-8 md:pb-8 pb-24"} ${chatOpen ? "lg:mr-[360px]" : ""}`}>
 
           {/* AI-researched disclaimer — topic sessions only */}
           {session.session_type === "topic" && (
@@ -636,6 +834,22 @@ export default function StudyPage() {
                           You scored {correctCount} / {session.quiz.length}
                         </h3>
                         <p className="text-sm text-zinc-500 mt-1">Review your answers below.</p>
+                        <button
+                          onClick={() => {
+                            const wrongQuestions = session.quiz
+                              .filter((q, i) => answers[i] !== null && answers[i] !== q.answer_index)
+                              .map(q => q.question)
+                              .slice(0, 3);
+                            const wrongSummary = wrongQuestions.length > 0
+                              ? ` Questions I got wrong: ${wrongQuestions.map((q, idx) => `${idx + 1}. ${q}`).join("; ")}`
+                              : "";
+                            setTutorInput(`I just completed the quiz and scored ${correctCount} out of ${session.quiz.length}.${wrongSummary}`);
+                            setActiveTab("tutor");
+                          }}
+                          className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          Share results with tutor
+                        </button>
                       </div>
 
                       <div className="flex flex-col gap-3">
@@ -706,6 +920,138 @@ export default function StudyPage() {
               )}
             </div>
           )}
+
+          {/* Tutor */}
+          {activeTab === "tutor" && (
+            <div data-testid="tutor-chat" className="flex flex-col flex-1 overflow-hidden">
+              {/* Tutor header */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 shrink-0">
+                <span className="text-xs text-zinc-400">
+                  {tutorHistory.filter(m => m.content.trim() !== "").length} / {TUTOR_MAX_MESSAGES} messages
+                </span>
+                <button
+                  onClick={resetTutorChat}
+                  disabled={isTutorStreaming || tutorHistory.length === 0}
+                  title="Reset tutor conversation"
+                  className="text-zinc-400 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+              {/* Message list */}
+              <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 pb-16 md:pb-0">
+                {/* Persona-adapted intro — always shown as first tutor bubble, survives reset */}
+                {session?.chat_intro && (
+                  <div className="flex justify-start">
+                    <div className="w-full max-w-[90%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed bg-zinc-100 text-zinc-900">
+                      {session.chat_intro}
+                    </div>
+                  </div>
+                )}
+                {tutorHistory.map((msg, i) => {
+                  // Don't render empty assistant placeholders — the typing indicator handles that state
+                  if (msg.role === "assistant" && msg.content === "") return null;
+                  return (
+                    <div
+                      key={i}
+                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      {msg.role === "user" ? (
+                        <div className="max-w-[80%] rounded-2xl rounded-br-sm px-3 py-2 text-sm leading-relaxed bg-blue-600 text-white">
+                          {msg.content}
+                        </div>
+                      ) : (
+                        <div className="w-full max-w-[90%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed bg-zinc-100 text-zinc-900">
+                          <div className="prose prose-sm max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                          </div>
+                          {/* Streaming cursor — shows while this is the active streaming message */}
+                          {isTutorStreaming && i === tutorHistory.length - 1 && (
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                              <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "75ms" }} />
+                              <span className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* Typing indicator — shown before first token arrives */}
+                {isTutorStreaming && tutorHistory[tutorHistory.length - 1]?.content.trim() === "" && (
+                  <div className="flex justify-start">
+                    <div className="rounded-2xl rounded-bl-sm px-3 py-2 bg-zinc-100">
+                      <div className="flex gap-1 items-center h-5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={tutorMessagesEndRef} />
+              </div>
+
+              {/* Input area */}
+              <div className="border-t border-zinc-200 px-4 py-3 flex flex-col gap-2 bg-white">
+                {tutorHistory.filter(m => m.content.trim() !== "").length >= TUTOR_MAX_MESSAGES ? (
+                  <div className="flex items-center justify-between py-1">
+                    <p className="text-xs text-zinc-400">Conversation limit reached.</p>
+                    <button
+                      onClick={resetTutorChat}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Start new conversation
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 items-end">
+                    <textarea
+                      ref={tutorTextareaRef}
+                      rows={1}
+                      value={tutorInput}
+                      onChange={(e) => {
+                        setTutorInput(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = `${e.target.scrollHeight}px`;
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (tutorInput.trim() && !isTutorStreaming) {
+                            const msg = tutorInput;
+                            setTutorInput("");
+                            if (tutorTextareaRef.current) tutorTextareaRef.current.style.height = "auto";
+                            sendTutorMessage(msg);
+                          }
+                        }
+                      }}
+                      disabled={isTutorStreaming || !session}
+                      placeholder="Ask your tutor anything about this material..."
+                      className="flex-1 resize-none rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 max-h-32 overflow-y-auto"
+                    />
+                    <button
+                      onClick={() => {
+                        if (tutorInput.trim() && !isTutorStreaming) {
+                          const msg = tutorInput;
+                          setTutorInput("");
+                          if (tutorTextareaRef.current) tutorTextareaRef.current.style.height = "auto";
+                          sendTutorMessage(msg);
+                        }
+                      }}
+                      disabled={!tutorInput.trim() || isTutorStreaming || !session}
+                      className="rounded-xl bg-blue-600 text-white px-3 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                    >
+                      Send
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </main>
 
         {/* Mobile bottom tab bar — hidden on desktop */}
@@ -713,18 +1059,18 @@ export default function StudyPage() {
           className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 flex z-50"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
-          {(["notes", "flashcards", "quiz"] as Tab[]).map((tab) => (
+          {(["notes", "flashcards", "quiz", "tutor"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 flex flex-col items-center justify-center py-2 gap-1 text-[0.6875rem] capitalize transition-colors min-h-[56px] ${
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-1 text-[0.6875rem] transition-colors min-h-[56px] ${
                 activeTab === tab
                   ? "text-blue-600 font-semibold"
                   : "text-zinc-400"
               }`}
             >
               {TAB_ICONS[tab]}
-              {tab}
+              {TAB_LABELS[tab]}
             </button>
           ))}
         </nav>
