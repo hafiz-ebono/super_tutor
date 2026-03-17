@@ -22,22 +22,19 @@ def _build_model(provider: str, model_id: str, api_key: str):
     elif provider == "openai":
         from agno.models.openai import OpenAIChat
         return OpenAIChat(id=model_id, api_key=api_key, max_retries=_SDK_RETRIES)
+    elif provider == "mistral":
+        # Use native MistralChat instead of OpenAIChat-compat: the native class
+        # explicitly sets "type": "function" on every tool call dict (streaming and
+        # non-streaming).  OpenAIChat passes through raw SDK objects, and Mistral's
+        # streaming deltas omit the type field, causing agno's get_function_call_for_tool_call
+        # to silently drop every tool call (type == None != "function").
+        from agno.models.mistral import MistralChat
+        return MistralChat(id=model_id, api_key=api_key)
     else:
         from agno.models.openai import OpenAIChat
         kwargs = dict(id=model_id, api_key=api_key, max_retries=_SDK_RETRIES)
         if provider == "openrouter":
             kwargs["base_url"] = "https://openrouter.ai/api/v1"
-        elif provider == "mistral":
-            kwargs["base_url"] = "https://api.mistral.ai/v1"
-            # Mistral's OpenAI-compatible API rejects the 'developer' role that agno
-            # injects by default for system messages. Override role_map to keep 'system'.
-            kwargs["role_map"] = {
-                "system": "system",
-                "user": "user",
-                "assistant": "assistant",
-                "tool": "tool",
-                "model": "assistant",
-            }
         return OpenAIChat(**kwargs)
 
 

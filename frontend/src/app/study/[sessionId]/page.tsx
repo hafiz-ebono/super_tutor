@@ -942,6 +942,14 @@ export default function StudyPage() {
               </div>
               {/* Message list */}
               <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 pb-16 md:pb-0">
+                {/* Persona-adapted intro — always shown as first tutor bubble, survives reset */}
+                {session?.chat_intro && (
+                  <div className="flex justify-start">
+                    <div className="w-full max-w-[90%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed bg-zinc-100 text-zinc-900">
+                      {session.chat_intro}
+                    </div>
+                  </div>
+                )}
                 {tutorHistory.map((msg, i) => {
                   // Don't render empty assistant placeholders — the typing indicator handles that state
                   if (msg.role === "assistant" && msg.content === "") return null;

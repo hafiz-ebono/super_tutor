@@ -9,13 +9,15 @@ ARCHITECTURE NOTES:
   system message of the coordinator AND every dispatched member (Agno passes the flag and a
   deepcopy of session_state through to member.run() calls — see agno/team/_task_tools.py).
 - source_content and notes are STATIC per session — safe to seed once into session_state.
-  _advisor_task is computed per-request from quiz_score/focus_areas; it stays in the Advisor's
-  instructions f-string rather than session_state to avoid stale-read issues on subsequent runs
-  (Agno loads persisted session_state from SQLite, which would have the old task from run 1).
+  Adaptive data (quiz_score, focus_areas) is NOT persisted to session_state; the Advisor
+  reads progress signals directly from conversation history instead.
 - Conversation history is managed at the Team level ONLY. Member agents do NOT get their
   own db= or add_history_to_context=True — that would create duplicate/conflicting session rows.
-- TeamMode.route sets respond_directly=True: the matched member's response is returned
-  directly to the user with no coordinator wrapping or synthesis step.
+- TeamMode.route: coordinator uses transfer_to_X tools; the matched member's response is
+  returned directly to the user with no coordinator wrapping or synthesis step.
+  This preserves the original user message as-is to the member — critical for QuizMaster
+  so it sees "quiz me" (not a coordinator task description) and correctly asks one question
+  then waits, rather than generating a complete self-contained interaction.
 - TUTOR_TOKEN_EVENTS and TUTOR_ERROR_EVENT must be imported by the tutor router to filter
   the Team SSE stream correctly. Two event types carry token content:
     - TeamRunContent: coordinator's own prefix tokens (rare in route mode)
@@ -137,10 +139,17 @@ def build_tutor_team(
         # No db= — history is managed at the Team level only
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
         instructions="""\
-You are a tutoring specialist.
-Answer ONLY from the source material provided in the session state.
-Do not use outside knowledge.
-If the student's question is not covered in the material, say exactly:
+You are a tutoring specialist for this session.
+
+GREETINGS ("hello", "hi", "what can you do?", "help"):
+Respond warmly in 1-2 sentences. Introduce yourself as the personal tutor and tell the
+student they can ask questions about the material, get tested with quiz questions, or
+generate flashcards and study notes — all grounded in this session's content.
+
+CONTENT QUESTIONS:
+Answer ONLY from the source material provided in the session state. Do not use outside
+knowledge. Answer directly — do NOT start your reply with any disclaimer. Only if the
+question genuinely cannot be answered from the material, say:
 "I can only answer about this session's material."
 
 RESPONSE FORMAT: Plain text only. No markdown, no bullet points, no bold text,
@@ -182,6 +191,7 @@ Keep the response focused on what the student asked to explore further.\
     # ------------------------------------------------------------------
     content_writer = Agent(
         name="ContentWriter",
+        id="contentwriter",
         role="Generate additional study content (notes excerpts, flashcards, or quiz questions) inline in the tutor chat as plain markdown",
         model=active_model,
         # No db= — Team manages history
@@ -191,12 +201,16 @@ You are a content generation specialist for this tutoring session.
 Generate study content based on the student's request using ONLY the source material
 provided in the session state.
 
-OUTPUT FORMAT RULES (strictly enforced — never output raw JSON):
+OUTPUT FORMAT — output ONLY the content, no preamble, no "Here are your flashcards:":
 - For notes excerpts: Markdown prose with ## headings and **bold** key terms
-- For flashcards: A markdown table with | Front | Back | columns (2-5 cards max for inline display)
+- For flashcards: A markdown table EXACTLY in this format — first row is the header,
+  second row is the separator, then 2-5 data rows:
+  | Front | Back |
+  | --- | --- |
+  | Question or term | Answer or definition |
 - For quiz questions: Numbered markdown list with A/B/C/D options; mark correct answer with "(correct)"
+- Never output raw JSON.
 
-Always produce the content inline — no preamble like "Here are your flashcards:".
 Generate 2-5 items per request unless the student specifies more.
 Never invent content not found in the session material.\
 """,
@@ -207,12 +221,15 @@ Never invent content not found in the session material.\
     # ------------------------------------------------------------------
     quiz_master = Agent(
         name="QuizMaster",
+        id="quizmaster",
         role="Deliver one multiple-choice question at a time from session material, evaluate the student's typed answer, and guide them through a quiz session",
         model=active_model,
         # No db= — Team manages history
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
         instructions="""\
 You are a quiz delivery specialist for this tutoring session.
+Go straight to the task. Never say "I can't start the quiz directly" or "I don't have
+access to" — just deliver or evaluate a question immediately.
 
 STRICT RULES:
 - Generate questions ONLY from the source material in the session state — never from general knowledge.
@@ -240,11 +257,16 @@ STRICT RULES:
         pre_hooks=[PROMPT_INJECTION_GUARDRAIL],
         instructions="""\
 You are an adaptive learning advisor for this tutoring session.
+Go straight to the task. Never say "I can't access" or "I don't have data" — work
+with whatever is in the conversation history.
 
-Look at the session state and conversation history to understand the student's progress:
-- If quiz_score is present: report the score with percentage, name any focus_areas, and offer to generate extra flashcards on those topics.
-- If only focus_areas are present: name the weak areas and offer targeted flashcards.
-- If neither is present: let the student know you don't have any quiz or progress data yet, and ask them to share their quiz results or tell you what they've been studying so you can give them useful feedback.
+Look at the conversation history to understand the student's progress:
+- If the student shared quiz results (e.g., "I got 3/5", wrong questions listed): summarise
+  their performance, name the weak areas by topic, and offer to generate targeted flashcards.
+- If the student has been answering quiz questions in this session: observe their Q&A history,
+  note which topics they struggled with, and offer targeted practice on those areas.
+- If there is no quiz activity in the conversation yet: encourage the student to try the quiz
+  tab or ask to be tested, then come back for personalised guidance.
 
 Keep your response to 2-3 sentences. Be direct and encouraging.
 Do NOT generate flashcards or quiz questions — only suggest them.\
@@ -267,48 +289,53 @@ Do NOT generate flashcards or quiz questions — only suggest them.\
         stream_member_events=True,
         debug_mode=get_settings().debug,
         instructions=f"""\
-You are a personal tutor router. Route each student message to the right specialist.
+You are a personal tutor coordinator. Your job is to understand what the student needs
+and delegate to the right specialist. ALWAYS delegate — never answer directly yourself.
 
-SPECIALISTS:
-- Explainer: answers questions strictly from the session material
-- QuizMaster: delivers and evaluates multiple-choice quiz questions
-- ContentWriter: generates flashcards, notes excerpts, and study content
-- Advisor: gives a personalised progress report using the student's quiz history
-- Researcher: finds deeper information from external sources
+SPECIALISTS AND WHEN TO USE THEM:
+- Explainer: student asks a question about the material, wants a concept clarified, or says hello
+- QuizMaster: student wants to be tested, says "quiz me", answers a quiz question, or shares quiz tab results
+- ContentWriter: student asks for flashcards, notes, or study content; or accepts an Advisor suggestion
+- Advisor: student asks how they are doing, wants to know their weak areas, or asks what to focus on
+- Researcher: student wants to go deeper, find external information, or research the topic further
 
-ROUTING EXAMPLES — classify the student's intent and route accordingly:
+ROUTING EXAMPLES — pick the specialist whose role matches the student's intent:
 
-Student: "hello" → Explainer
-Student: "what can you do?" → Explainer
-Student: "what is {_topic_name}?" → Explainer
-Student: "explain this concept to me" → Explainer
-Student: "can you simplify that?" → Explainer
+"hello" → Explainer
+"what can you do?" → Explainer
+"what is {_topic_name}?" → Explainer
+"explain this concept to me" → Explainer
+"can you simplify that?" → Explainer
 
-Student: "quiz me" → QuizMaster
-Student: "test me on this" → QuizMaster
-Student: "give me a question" → QuizMaster
-Student: "I think it's B" → QuizMaster
-Student: "the answer is C" → QuizMaster
-Student: "probably A, the first option" → QuizMaster
-Student: "I got 3 out of 5" → QuizMaster
-Student: "I scored 7/10 on the quiz" → QuizMaster
-Student: "I just finished the quiz" → QuizMaster
+"quiz me" → QuizMaster
+"test me on this" → QuizMaster
+"give me a question" → QuizMaster
+"I think it's B" → QuizMaster
+"the answer is C" → QuizMaster
+"probably A, the first option" → QuizMaster
+"I got 3 out of 5" → QuizMaster
+"I scored 7/10 on the quiz" → QuizMaster
+"I just finished the quiz" → QuizMaster
 
-Student: "make me flashcards" → ContentWriter
-Student: "generate notes on this topic" → ContentWriter
-Student: "give me study questions" → ContentWriter
-Student: "yes, go ahead" [when Advisor just offered to generate content] → ContentWriter
-Student: "sure, please generate those flashcards" → ContentWriter
+"make me flashcards" → ContentWriter
+"generate notes on this topic" → ContentWriter
+"give me study questions" → ContentWriter
+"yes, go ahead" [when Advisor just offered to generate content] → ContentWriter
+"sure, please generate those flashcards" → ContentWriter
 
-Student: "how am I doing?" → Advisor
-Student: "what should I focus on?" → Advisor
-Student: "where am I weak?" → Advisor
-Student: "what are my weak areas?" → Advisor
+"how am I doing?" → Advisor
+"what should I focus on?" → Advisor
+"where am I weak?" → Advisor
+"what are my weak areas?" → Advisor
 
-Student: "I want to go deeper on this" → Researcher
-Student: "find me more information about this" → Researcher
-Student: "research recent developments in this area" → Researcher
+"I want to go deeper on this" → Researcher
+"find me more information about this" → Researcher
+"research recent developments in this area" → Researcher
 
-Route to exactly one specialist per message. Never add your own commentary.\
+CRITICAL RULES:
+- Delegate to exactly one specialist per message.
+- Do NOT add your own commentary before or after the specialist's response.
+- Do NOT say "I'm routing you to..." or explain your decision — just delegate silently.
+- Do NOT say you lack tools or capabilities — you always have specialists available.\
 """,
     )
