@@ -85,8 +85,8 @@ _LLM_ERROR_SUBSTRINGS = (
 
 def _looks_like_llm_error(text: str) -> bool:
     """Return True if text appears to be a provider error string rather than real content."""
-    lower = text.lower()
-    if text.strip().startswith('{"error":') and '"message"' in lower:
+    lower = text.strip().lower()
+    if lower.startswith('{"error":') and '"message"' in lower:
         return True
     return any(s in lower for s in _LLM_ERROR_SUBSTRINGS)
 
@@ -632,7 +632,7 @@ async def run_workflow_background(
     except Exception as e:
         logger.error("Workflow failed — session_id=%s", session_id, exc_info=True)
         error_str = str(e)
-        if "rate_limit_exceeded" in error_str or "status 429" in error_str.lower():
+        if "rate_limit_exceeded" in error_str.lower() or "status 429" in error_str.lower():
             update_session_status(session_id, "failed", "rate_limit", error_str)
         else:
             update_session_status(session_id, "failed", "workflow_error", error_str)
