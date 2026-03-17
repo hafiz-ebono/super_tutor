@@ -23,11 +23,6 @@ def _build_model(provider: str, model_id: str, api_key: str):
         from agno.models.openai import OpenAIChat
         return OpenAIChat(id=model_id, api_key=api_key, max_retries=_SDK_RETRIES)
     elif provider == "mistral":
-        # Use native MistralChat instead of OpenAIChat-compat: the native class
-        # explicitly sets "type": "function" on every tool call dict (streaming and
-        # non-streaming).  OpenAIChat passes through raw SDK objects, and Mistral's
-        # streaming deltas omit the type field, causing agno's get_function_call_for_tool_call
-        # to silently drop every tool call (type == None != "function").
         from agno.models.mistral import MistralChat
         return MistralChat(id=model_id, api_key=api_key)
     else:
